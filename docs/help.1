@@ -1,0 +1,89 @@
+% LUMINO-MCP-SERVER(1) Container Image Pages
+% LUMINO Project
+% December 2024
+
+# NAME
+lumino-mcp-server - MCP Server for Kubernetes, OpenShift, and Tekton monitoring and analysis
+
+# DESCRIPTION
+The LUMINO MCP Server container provides AI-powered tools for Site Reliability Engineering (SRE) operations on Kubernetes and OpenShift clusters.
+
+The server implements the Model Context Protocol (MCP) to expose 37 specialized tools for monitoring, log analysis, anomaly detection, and troubleshooting.
+
+# USAGE
+Run the container with podman:
+
+```
+podman run -d --name lumino-mcp-server \
+  -p 8000:8000 \
+  -v ~/.kube/config:/opt/app-root/.kube/config:ro \
+  quay.io/geored/lumino-mcp-server:latest
+```
+
+# ENVIRONMENT VARIABLES
+* **KUBERNETES_NAMESPACE** - Enable Kubernetes mode with HTTP streaming transport
+* **K8S_NAMESPACE** - Alternative namespace variable
+* **PROMETHEUS_URL** - Prometheus server URL for metrics queries
+* **LOG_LEVEL** - Logging level (default: INFO)
+
+# TRANSPORT MODES
+* **stdio** - Default mode for local MCP client integration
+* **streamable-http** - Enabled when KUBERNETES_NAMESPACE is set, binds to port 8000
+
+# LABELS
+* **org.opencontainers.image.title** - LUMINO MCP Server
+* **org.opencontainers.image.vendor** - LUMINO Project
+* **org.opencontainers.image.version** - 0.1.0
+* **org.opencontainers.image.licenses** - Apache-2.0
+
+# SECURITY
+This container follows security best practices:
+- Runs as non-root user (UID 1001)
+- Minimal system packages installed
+- Read-only tools (no cluster modifications)
+- Based on Red Hat UBI9
+
+# VOLUMES
+* **/opt/app-root/.kube** - Mount kubeconfig for cluster access
+* **/opt/app-root/src/.cache** - Application cache directory
+* **/opt/app-root/src/logs** - Application logs directory
+
+# PORTS
+* **8000** - MCP server HTTP port (Kubernetes mode)
+
+# EXAMPLES
+## Local Development with kubeconfig
+```
+podman run -it --rm \
+  -v ~/.kube/config:/opt/app-root/.kube/config:ro \
+  quay.io/geored/lumino-mcp-server:latest
+```
+
+## Kubernetes Deployment Mode
+```
+podman run -d --name lumino-mcp \
+  -p 8000:8000 \
+  -e KUBERNETES_NAMESPACE=default \
+  quay.io/geored/lumino-mcp-server:latest
+```
+
+## With Prometheus Integration
+```
+podman run -d --name lumino-mcp \
+  -p 8000:8000 \
+  -e PROMETHEUS_URL=http://prometheus:9090 \
+  -v ~/.kube/config:/opt/app-root/.kube/config:ro \
+  quay.io/geored/lumino-mcp-server:latest
+```
+
+# HEALTH CHECK
+The container includes a health check that verifies the MCP server is listening on port 8000.
+
+# SOURCE
+https://github.com/spre-sre/lumino-mcp-server
+
+# LICENSE
+Apache License 2.0
+
+# AUTHORS
+LUMINO Project Team

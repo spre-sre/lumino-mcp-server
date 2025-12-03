@@ -1,0 +1,35 @@
+
+You are generating a new MCP tool for a Kubernetes/OpenShift/Tekton monitoring server.
+ Please create one mcp.tool from each of the provided requirements.
+
+EXISTING IMPORTS AVAILABLE:
+{{ imports_from_current_project }}
+
+EXISTING HELPER FUNCTIONS AVAILABLE:
+{{ helper_functions_from_current_project }}
+
+EXISTING KUBERNETES CLIENTS AVAILABLE:
+{{ existing_k8s_clients_from_current_project }}
+
+EXISTING PROMETHEUS ENDPOINTS:
+{{ metrics_endpoints_from_current_project }}
+
+FUNCTIONALITY REQUIREMENTS:
+{{ user_defined_mcp.tool_requirements_for_this_tool }}
+
+INSTRUCTIONS:
+1. Generate a complete @mcp.tool() decorated function
+2. Use existing imports and helper functions where possible
+3. Follow the same error handling patterns as existing tools
+4. Include proper type hints and docstring
+5. Use async/await if making API calls
+6. Return the exact format specified in return_value
+7. Handle Kubernetes API exceptions properly
+8. Add logging statements for debugging
+9. Follow the existing code style and patterns
+10. @mcp.tool() functions are strictly read-only and must only retrieve data from Kubernetes/OpenShift clusters. These tools cannot perform any modifications, updates, deletions, or other write operations on cluster resources or data.
+
+Generate ONLY the functions code, no additional explanation.
+
+
+

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/spre-sre/lumino-mcp-server#readme
+    about: Check the README for usage instructions and troubleshooting
+  - name: Discussions
+    url: https://github.com/spre-sre/lumino-mcp-server/discussions
+    about: Ask questions and discuss ideas with the community
