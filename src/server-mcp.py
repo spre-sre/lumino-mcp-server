@@ -279,12 +279,14 @@ try:
     k8s_apps_api = client.AppsV1Api()
     k8s_custom_api = client.CustomObjectsApi()
     k8s_batch_api = client.BatchV1Api()
+    k8s_storage_api = client.StorageV1Api()
 except Exception as e:
     logger.warning(f"Failed to initialize Kubernetes API clients: {e}")
     k8s_core_api = None
     k8s_apps_api = None
     k8s_custom_api = None
     k8s_batch_api = None
+    k8s_storage_api = None
 
 
 # Prometheus endpoints configuration (local Tekton components)
