@@ -115,6 +115,9 @@ from .log_analysis import (
     train_anomaly_model,
     analyze_log_patterns_for_failure_prediction,
     generate_failure_predictions,
+    # Token limit truncation functions
+    truncate_to_token_limit,
+    truncate_streaming_results,
     # Utility functions
     analysis_cache,
 )
@@ -297,6 +300,8 @@ __all__ = [
     "train_anomaly_model",
     "analyze_log_patterns_for_failure_prediction",
     "generate_failure_predictions",
+    "truncate_to_token_limit",
+    "truncate_streaming_results",
     "analysis_cache",
     # Event Analysis
     "EventSeverity",

@@ -141,9 +141,12 @@ class StrategySelector:
 class LogStreamProcessor:
     """Manages streaming log processing with pattern detection."""
 
-    def __init__(self, chunk_size: int = 5000, analysis_mode: str = "errors_and_warnings"):
+    def __init__(self, chunk_size: int = 5000, analysis_mode: str = "errors_and_warnings",
+                 max_patterns_per_chunk: int = 100, max_content_length: int = 200):
         self.chunk_size = chunk_size
         self.analysis_mode = analysis_mode
+        self.max_patterns_per_chunk = max_patterns_per_chunk
+        self.max_content_length = max_content_length
         self.processed_lines = 0
         self.detected_patterns = []
         self.current_chunk = []
@@ -176,9 +179,16 @@ class LogStreamProcessor:
         return result
 
     def _extract_patterns_from_chunk(self, chunk_lines: List[str]) -> Dict[str, List[Dict[str, Any]]]:
-        """Extract patterns from a chunk of log lines."""
+        """Extract patterns from a chunk of log lines with token-aware limits."""
         focus_areas = self._get_focus_areas_for_mode(self.analysis_mode)
-        return extract_log_patterns(chunk_lines, focus_areas)
+        # Calculate max patterns per area based on total limit
+        max_per_area = max(10, self.max_patterns_per_chunk // len(focus_areas)) if focus_areas else 10
+        return extract_log_patterns(
+            chunk_lines,
+            focus_areas,
+            max_patterns_per_area=max_per_area,
+            max_content_length=self.max_content_length
+        )
 
     def _get_focus_areas_for_mode(self, mode: str) -> List[str]:
         """Get focus areas based on analysis mode."""
@@ -191,11 +201,15 @@ class LogStreamProcessor:
         return mode_mappings.get(mode, ["errors", "warnings"])
 
     def _identify_new_issues(self, chunk_patterns: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
-        """Identify new issues not seen in previous chunks."""
+        """Identify new issues not seen in previous chunks (limited to prevent token overflow)."""
         new_issues = []
+        max_new_issues = 20  # Limit new issues per chunk to prevent token overflow
 
         for category, patterns in chunk_patterns.items():
             for pattern in patterns:
+                if len(new_issues) >= max_new_issues:
+                    break  # Stop if we've found enough new issues
+
                 # Simple new issue detection (could be enhanced with ML)
                 pattern_signature = pattern["content"][:100]  # First 100 chars as signature
 
@@ -211,6 +225,9 @@ class LogStreamProcessor:
                         "pattern": pattern,
                         "severity": self._assess_severity(category, pattern)
                     })
+
+            if len(new_issues) >= max_new_issues:
+                break
 
         return new_issues
 
@@ -250,8 +267,15 @@ class LogStreamProcessor:
 # LOG PATTERN EXTRACTION FUNCTIONS
 # ============================================================================
 
-def extract_log_patterns(log_lines: List[str], focus_areas: List[str]) -> Dict[str, List[Dict[str, Any]]]:
-    """Extract patterns from log lines based on focus areas."""
+def extract_log_patterns(log_lines: List[str], focus_areas: List[str], max_patterns_per_area: int = 50, max_content_length: int = 200) -> Dict[str, List[Dict[str, Any]]]:
+    """Extract patterns from log lines based on focus areas.
+
+    Args:
+        log_lines: List of log lines to analyze
+        focus_areas: List of focus areas to extract patterns for
+        max_patterns_per_area: Maximum number of patterns per area (default: 50)
+        max_content_length: Maximum content length per pattern (default: 200 chars)
+    """
 
     patterns = {area: [] for area in focus_areas}
 
@@ -308,14 +332,28 @@ def extract_log_patterns(log_lines: List[str], focus_areas: List[str]) -> Dict[s
         timestamp = extract_timestamp(line)
 
         for area in focus_areas:
+            # Skip if this area already has max patterns
+            if len(patterns[area]) >= max_patterns_per_area:
+                continue
+
             if area in pattern_regex:
                 for regex in pattern_regex[area]:
+                    # Skip if area is already full
+                    if len(patterns[area]) >= max_patterns_per_area:
+                        break
+
                     matches = re.findall(regex, line)
                     for match in matches:
+                        if len(patterns[area]) >= max_patterns_per_area:
+                            break
+                        # Truncate content to max_content_length
+                        truncated_content = line.strip()[:max_content_length]
+                        if len(line.strip()) > max_content_length:
+                            truncated_content += "..."
                         patterns[area].append({
                             "line_number": line_num,
                             "timestamp": timestamp,
-                            "content": line.strip(),
+                            "content": truncated_content,
                             "matched_text": match if isinstance(match, str) else str(match),
                             "severity": assess_log_severity(line)
                         })
@@ -361,8 +399,15 @@ def assess_log_severity(log_line: str) -> str:
     # Low severity (info, debug, etc.)
     return "low"
 
-def sample_logs_by_time(log_lines: List[str], time_segments: int) -> Dict[str, List[str]]:
-    """Sample logs by dividing into time segments."""
+def sample_logs_by_time(log_lines: List[str], time_segments: int, max_logs_per_segment: int = 100, max_line_length: int = 300) -> Dict[str, List[str]]:
+    """Sample logs by dividing into time segments with token-aware limits.
+
+    Args:
+        log_lines: List of log lines to segment
+        time_segments: Number of time segments to create
+        max_logs_per_segment: Maximum number of log lines per segment (default: 100)
+        max_line_length: Maximum characters per log line (default: 300)
+    """
 
     if not log_lines or time_segments <= 0:
         return {}
@@ -378,7 +423,9 @@ def sample_logs_by_time(log_lines: List[str], time_segments: int) -> Dict[str, L
             timestamped_logs.append((datetime.now().isoformat(), line))
 
     if not timestamped_logs:
-        return {"segment_1": log_lines}
+        # Limit even the fallback case
+        limited_logs = log_lines[:max_logs_per_segment]
+        return {"segment_1": [line[:max_line_length] + ("..." if len(line) > max_line_length else "") for line in limited_logs]}
 
     # Sort by timestamp
     timestamped_logs.sort(key=lambda x: x[0])
@@ -391,7 +438,29 @@ def sample_logs_by_time(log_lines: List[str], time_segments: int) -> Dict[str, L
         start_idx = i * segment_size
         end_idx = start_idx + segment_size if i < time_segments - 1 else len(timestamped_logs)
 
-        segment_logs = [log for _, log in timestamped_logs[start_idx:end_idx]]
+        # Get segment logs with limit
+        segment_logs_raw = [log for _, log in timestamped_logs[start_idx:end_idx]]
+
+        # Apply sampling if segment exceeds max_logs_per_segment
+        if len(segment_logs_raw) > max_logs_per_segment:
+            # Sample: first 30%, middle 40%, last 30%
+            first_count = max_logs_per_segment * 30 // 100
+            middle_count = max_logs_per_segment * 40 // 100
+            last_count = max_logs_per_segment - first_count - middle_count
+
+            first_logs = segment_logs_raw[:first_count]
+            middle_start = len(segment_logs_raw) // 2 - middle_count // 2
+            middle_logs = segment_logs_raw[middle_start:middle_start + middle_count]
+            last_logs = segment_logs_raw[-last_count:]
+
+            segment_logs_raw = first_logs + middle_logs + last_logs
+
+        # Truncate long lines
+        segment_logs = [
+            line[:max_line_length] + ("..." if len(line) > max_line_length else "")
+            for line in segment_logs_raw
+        ]
+
         segments[f"segment_{i + 1}"] = segment_logs
 
     return segments
@@ -905,3 +974,172 @@ def _build_log_params(search_params: Dict[str, Any]) -> Dict[str, Any]:
         'since_seconds': since_seconds,
         'tail_lines': 500  # Reasonable limit for semantic analysis
     }
+
+
+# ============================================================================
+# TOKEN LIMIT TRUNCATION FUNCTIONS
+# ============================================================================
+
+def truncate_to_token_limit(data: Dict[str, Any], max_tokens: int, chars_per_token: int = 4) -> Dict[str, Any]:
+    """Truncate response data to fit within token limit.
+
+    Args:
+        data: The response dictionary to truncate
+        max_tokens: Maximum number of tokens allowed
+        chars_per_token: Estimated characters per token (default: 4)
+
+    Returns:
+        Truncated data that fits within the token limit
+    """
+    import json
+
+    # Estimate current size
+    try:
+        current_chars = len(json.dumps(data, default=str))
+        current_tokens = current_chars // chars_per_token
+    except (TypeError, ValueError):
+        current_tokens = max_tokens + 1  # Force truncation if serialization fails
+
+    if current_tokens <= max_tokens:
+        return data
+
+    # Create a copy to avoid modifying original
+    result = data.copy()
+
+    # Progressive truncation strategy
+    # Stage 1: Truncate patterns to top N per category
+    if 'patterns' in result and isinstance(result['patterns'], dict):
+        max_per_category = max(5, max_tokens // 200)  # Scale with token limit
+        for category in result['patterns']:
+            if isinstance(result['patterns'][category], list):
+                result['patterns'][category] = result['patterns'][category][:max_per_category]
+                # Also truncate content within each pattern
+                for pattern in result['patterns'][category]:
+                    if isinstance(pattern, dict) and 'content' in pattern:
+                        pattern['content'] = pattern['content'][:150] + "..." if len(pattern.get('content', '')) > 150 else pattern.get('content', '')
+
+    # Check size after stage 1
+    try:
+        current_tokens = len(json.dumps(result, default=str)) // chars_per_token
+    except (TypeError, ValueError):
+        pass
+
+    if current_tokens <= max_tokens:
+        result['_truncated'] = True
+        result['_truncation_stage'] = 1
+        return result
+
+    # Stage 2: Convert time_segments to counts only
+    if 'time_segments' in result and isinstance(result['time_segments'], dict):
+        result['time_segments'] = {
+            k: len(v) if isinstance(v, list) else v
+            for k, v in result['time_segments'].items()
+        }
+        result['time_segments']['_note'] = 'Counts only - full logs truncated for token limit'
+
+    # Check size after stage 2
+    try:
+        current_tokens = len(json.dumps(result, default=str)) // chars_per_token
+    except (TypeError, ValueError):
+        pass
+
+    if current_tokens <= max_tokens:
+        result['_truncated'] = True
+        result['_truncation_stage'] = 2
+        return result
+
+    # Stage 3: Truncate representative_samples
+    if 'representative_samples' in result and isinstance(result['representative_samples'], list):
+        max_samples = max(3, max_tokens // 500)
+        result['representative_samples'] = result['representative_samples'][:max_samples]
+        for sample in result['representative_samples']:
+            if isinstance(sample, dict) and 'content' in sample:
+                sample['content'] = sample['content'][:100] + "..." if len(sample.get('content', '')) > 100 else sample.get('content', '')
+
+    # Check size after stage 3
+    try:
+        current_tokens = len(json.dumps(result, default=str)) // chars_per_token
+    except (TypeError, ValueError):
+        pass
+
+    if current_tokens <= max_tokens:
+        result['_truncated'] = True
+        result['_truncation_stage'] = 3
+        return result
+
+    # Stage 4: Truncate chunk results (for streaming analysis)
+    if 'chunks' in result and isinstance(result['chunks'], list):
+        max_chunks = max(3, max_tokens // 1000)
+        result['chunks'] = result['chunks'][:max_chunks]
+        # Truncate patterns within each chunk
+        for chunk in result['chunks']:
+            if isinstance(chunk, dict) and 'patterns' in chunk:
+                for category in chunk['patterns']:
+                    if isinstance(chunk['patterns'][category], list):
+                        chunk['patterns'][category] = chunk['patterns'][category][:5]
+
+    # Stage 5: Remove large metadata fields if still too large
+    try:
+        current_tokens = len(json.dumps(result, default=str)) // chars_per_token
+    except (TypeError, ValueError):
+        pass
+
+    if current_tokens > max_tokens:
+        # Remove optional large fields
+        fields_to_trim = ['raw_logs', 'full_timeline', 'detailed_analysis', 'chunk_details']
+        for field in fields_to_trim:
+            if field in result:
+                del result[field]
+
+    result['_truncated'] = True
+    result['_truncation_stage'] = 'final'
+    result['_original_token_estimate'] = current_tokens
+    result['_max_tokens'] = max_tokens
+
+    return result
+
+
+def truncate_streaming_results(chunk_results: List[Dict[str, Any]], max_tokens: int) -> List[Dict[str, Any]]:
+    """Truncate streaming chunk results to fit within token limit.
+
+    Args:
+        chunk_results: List of chunk analysis results
+        max_tokens: Maximum number of tokens allowed
+
+    Returns:
+        Truncated list of chunk results
+    """
+    import json
+
+    if not chunk_results:
+        return chunk_results
+
+    chars_per_token = 4
+
+    # Estimate current size
+    try:
+        current_tokens = len(json.dumps(chunk_results, default=str)) // chars_per_token
+    except (TypeError, ValueError):
+        current_tokens = max_tokens + 1
+
+    if current_tokens <= max_tokens:
+        return chunk_results
+
+    # Calculate how many chunks we can afford
+    avg_tokens_per_chunk = current_tokens // len(chunk_results) if chunk_results else 1
+    max_chunks = max(3, max_tokens // max(avg_tokens_per_chunk, 100))
+
+    # Keep most recent chunks (they're likely more relevant)
+    truncated = chunk_results[-max_chunks:]
+
+    # Further truncate patterns within each chunk
+    for chunk in truncated:
+        if 'patterns' in chunk and isinstance(chunk['patterns'], dict):
+            for category in chunk['patterns']:
+                if isinstance(chunk['patterns'][category], list):
+                    chunk['patterns'][category] = chunk['patterns'][category][:10]
+
+        if 'new_issues' in chunk and isinstance(chunk['new_issues'], list):
+            chunk['new_issues'] = chunk['new_issues'][:5]
+
+    return truncated

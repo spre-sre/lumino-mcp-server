@@ -85,6 +85,9 @@ from helpers import (
     train_anomaly_model,
     analyze_log_patterns_for_failure_prediction,
     generate_failure_predictions,
+    # Token limit truncation helpers
+    truncate_to_token_limit,
+    truncate_streaming_results,
     # Pipeline analysis helpers
     determine_root_cause,
     recommend_actions,
@@ -333,26 +336,28 @@ class AdaptiveLogProcessor:
         return (self.used_tokens / self.effective_budget) * 100
 
 
-async def _estimate_pod_log_tokens(namespace: str, pod_name: str, time_window_seconds: int = 600) -> int:
+async def _estimate_pod_log_tokens(namespace: str, pod_name: str, tail_lines: int = 500, sample_ratio: float = 0.1) -> int:
     """
-    Estimate token usage for a pod's logs within a time window.
+    Estimate token usage for a pod's logs using representative sampling.
 
     Args:
         namespace: Kubernetes namespace
         pod_name: Pod name to estimate
-        time_window_seconds: Time window for estimation (default: 10 minutes)
+        tail_lines: The actual tail_lines that will be used for fetching
+        sample_ratio: Fraction of tail_lines to sample (default: 10%)
 
     Returns:
-        Estimated token count for the pod's logs
+        Estimated token count for the pod's logs (extrapolated from sample)
     """
     try:
-        # Get a small sample to estimate token density
+        # Sample a fraction of the logs to estimate token density
+        sample_lines = max(50, int(tail_lines * sample_ratio))
+
         sample = await get_all_pod_logs(
             pod_name=pod_name,
             namespace=namespace,
             k8s_core_api=k8s_core_api,
-            since_seconds=time_window_seconds,
-            tail_lines=100  # Small sample
+            tail_lines=sample_lines
         )
 
         if sample:
@@ -361,14 +366,22 @@ async def _estimate_pod_log_tokens(namespace: str, pod_name: str, time_window_se
                 if isinstance(container_logs, str):
                     sample_text += container_logs
 
-            estimated_tokens = calculate_context_tokens(sample_text)
-            logger.debug(f"Token estimate for {pod_name}: ~{estimated_tokens} tokens for {time_window_seconds}s window")
+            sample_tokens = calculate_context_tokens(sample_text)
+
+            # Extrapolate to full tail_lines with capped multiplier to avoid over-estimation
+            # Cap at 3x to handle cases where sample has unusually high token density
+            raw_factor = tail_lines / sample_lines
+            extrapolation_factor = min(raw_factor * 1.1, 3.0)  # Cap at 3x, use 1.1x safety margin
+            estimated_tokens = int(sample_tokens * extrapolation_factor)
+
+            logger.debug(f"Token estimate for {pod_name}: ~{estimated_tokens} tokens (sampled {sample_lines} lines, factor {extrapolation_factor:.2f}x)")
             return estimated_tokens
 
     except Exception as e:
         logger.debug(f"Token estimation failed for {pod_name}: {e}")
 
-    return 5000  # Conservative default
+    # Conservative default: assume ~30 tokens per line
+    return tail_lines * 30
 
 
 async def _prioritize_pipeline_pods(pod_names: List[str], namespace: str) -> List[str]:
@@ -455,6 +468,40 @@ def _calculate_adaptive_tail_lines(total_pods: int, processed_pods: int, remaini
 
     logger.debug(f"Adaptive tail_lines: {adaptive_lines} (budget: {remaining_budget}, pods left: {remaining_pods})")
     return adaptive_lines
+
+
+def _truncate_logs_to_token_limit(logs: str, max_tokens: int, pod_name: str) -> tuple[str, bool]:
+    """
+    Truncate logs if they exceed the token limit.
+
+    Args:
+        logs: Log content to potentially truncate
+        max_tokens: Maximum allowed tokens
+        pod_name: Pod name for logging
+
+    Returns:
+        Tuple of (truncated_logs, was_truncated)
+    """
+    current_tokens = calculate_context_tokens(logs)
+    if current_tokens <= max_tokens:
+        return logs, False
+
+    # Estimate characters per token from current content
+    chars_per_token = len(logs) / current_tokens if current_tokens > 0 else 4
+    target_chars = int(max_tokens * chars_per_token * 0.9)  # 90% to be safe
+
+    # Truncate and add notice
+    truncated = logs[:target_chars]
+    # Find last newline to avoid cutting mid-line
+    last_newline = truncated.rfind('\n')
+    if last_newline > target_chars * 0.8:  # Only use if we're not losing too much
+        truncated = truncated[:last_newline]
+
+    truncation_notice = f"\n\n[... TRUNCATED: {current_tokens:,} tokens exceeded budget of {max_tokens:,} tokens for pod {pod_name} ...]"
+    truncated += truncation_notice
+
+    logger.warning(f"Truncated logs for {pod_name}: {current_tokens:,} -> ~{max_tokens:,} tokens")
+    return truncated, True
 
 
 # ============================================================================
@@ -1058,17 +1105,31 @@ async def get_pipelinerun_logs(
     all_logs = {}
 
     try:
-        # Find pods associated with the PipelineRun
+        # Find pods associated with the PipelineRun using Tekton labels
+        # Tekton adds 'tekton.dev/pipelineRun' label to all pods in a PipelineRun
+        label_selector = f"tekton.dev/pipelineRun={pipelinerun_name}"
+
         pod_list = await asyncio.to_thread(
             k8s_core_api.list_namespaced_pod,
             namespace=namespace,
+            label_selector=label_selector,
         )
 
         if not pod_list.items:
-            return {"info": "No pods found for this PipelineRun."}
+            # Fallback: Try alternative label format used by some Tekton versions
+            label_selector_alt = f"tekton.dev/pipeline={pipelinerun_name}"
+            pod_list = await asyncio.to_thread(
+                k8s_core_api.list_namespaced_pod,
+                namespace=namespace,
+                label_selector=label_selector_alt,
+            )
+
+        if not pod_list.items:
+            return {"info": f"No pods found for PipelineRun '{pipelinerun_name}'. Check if the PipelineRun exists and has completed pods."}
 
         # Get all pod names
         pod_names = [pod.metadata.name for pod in pod_list.items]
+        logger.info(f"Found {len(pod_names)} pods for PipelineRun '{pipelinerun_name}'")
 
         # Check if adaptive mode should be used
         use_adaptive_processing = (tail_lines is None and since_seconds is None and since_time is None)
@@ -1084,20 +1145,25 @@ async def get_pipelinerun_logs(
 
             # Process pods progressively with token management
             processed_pods = 0
+            truncated_pods = 0  # Track how many pods had logs truncated
             for pod_name in prioritized_pods:
-                # Estimate tokens for this pod
-                estimated_tokens = await _estimate_pod_log_tokens(namespace, pod_name, 600)
-
-                if not processor.can_process_more(estimated_tokens):
-                    logger.info(f"Token budget reached ({processor.get_usage_percentage():.1f}% used) - processed {processed_pods}/{len(pod_names)} pods")
-                    break
-
-                # Determine adaptive tail_lines based on pipeline size and remaining budget
+                # STEP 1: Calculate adaptive tail_lines FIRST based on pipeline size and remaining budget
                 adaptive_tail_lines = _calculate_adaptive_tail_lines(
                     len(pod_names), processed_pods, processor.get_remaining_budget()
                 )
 
+                # STEP 2: Estimate tokens using the SAME tail_lines that will be used for fetching
+                estimated_tokens = await _estimate_pod_log_tokens(namespace, pod_name, tail_lines=adaptive_tail_lines)
+
+                # STEP 3: Check if we can process this pod within budget
+                # GUARANTEE: Always process at least the first pod (highest priority - usually failed)
+                is_first_pod = (processed_pods == 0)
+                if not is_first_pod and not processor.can_process_more(estimated_tokens):
+                    logger.info(f"Token budget reached ({processor.get_usage_percentage():.1f}% used) - processed {processed_pods}/{len(pod_names)} pods")
+                    break
+
                 try:
+                    # STEP 4: Fetch logs with the calculated adaptive_tail_lines
                     pod_logs = await get_all_pod_logs(
                         pod_name=pod_name,
                         namespace=namespace,
@@ -1123,8 +1189,19 @@ async def get_pipelinerun_logs(
                             formatted_logs.append(f"--- End Container: {container_name} ---")
                         all_logs[pod_name] = "\n".join(formatted_logs)
 
-                    # Record actual token usage
+                    # HARD LIMIT ENFORCEMENT: Truncate if actual tokens exceed remaining budget
+                    remaining_budget = processor.get_remaining_budget()
                     actual_tokens = calculate_context_tokens(str(all_logs[pod_name]))
+
+                    if actual_tokens > remaining_budget:
+                        # Truncate logs to fit within remaining budget
+                        all_logs[pod_name], was_truncated = _truncate_logs_to_token_limit(
+                            all_logs[pod_name], remaining_budget, pod_name
+                        )
+                        if was_truncated:
+                            truncated_pods += 1
+                        actual_tokens = calculate_context_tokens(str(all_logs[pod_name]))
+
                     processor.record_usage(actual_tokens)
                     processed_pods += 1
 
@@ -1141,8 +1218,11 @@ async def get_pipelinerun_logs(
             all_logs["_adaptive_metadata"] = {
                 "adaptive_mode": True,
                 "pods_processed": processed_pods,
+                "pods_truncated": truncated_pods,
+                "pods_skipped": len(pod_names) - processed_pods,
                 "total_pods_found": len(pod_names),
                 "token_budget_used": f"{processor.get_usage_percentage():.1f}%",
+                "token_budget_max": processor.max_token_budget,
                 "processing_strategy": f"Pipeline size: {len(pod_names)} pods -> adaptive batching"
             }
 
@@ -4705,9 +4785,9 @@ async def smart_summarize_pod_logs(
         logger.warning(f"[{tool_name}] Invalid time_segments '{time_segments}', defaulting to 10")
         time_segments = 10
 
-    if max_context_tokens <= 1000:
-        logger.warning(f"[{tool_name}] Low max_context_tokens '{max_context_tokens}', setting to 10000")
-        max_context_tokens = 10000
+    if max_context_tokens < 500:
+        logger.warning(f"[{tool_name}] Very low token limit ({max_context_tokens}), minimum is 500")
+        max_context_tokens = 500
 
     try:
         # Step 1: Retrieve raw logs using existing function
@@ -4896,6 +4976,11 @@ async def smart_summarize_pod_logs(
 
         logger.info(f"[{tool_name}] Analysis completed successfully in {processing_time:.2f}s")
         logger.info(f"[{tool_name}] Found {results['metadata']['processing_metrics']['patterns_extracted']} pattern matches")
+
+        # Apply truncation to ensure output fits within token limit
+        results = truncate_to_token_limit(results, max_context_tokens)
+        if results.get('_truncated'):
+            logger.info(f"[{tool_name}] Output truncated to fit within {max_context_tokens} token limit")
 
         return results
 
@@ -5663,7 +5748,8 @@ async def stream_analyze_pod_logs(
     tail_lines: Optional[int] = None,
     time_period: Optional[str] = None,
     start_time: Optional[str] = None,
-    end_time: Optional[str] = None
+    end_time: Optional[str] = None,
+    max_context_tokens: int = 50000
 ) -> Dict[str, Any]:
     """
     Stream and analyze pod logs in chunks with progressive pattern detection.
@@ -5684,6 +5770,7 @@ async def stream_analyze_pod_logs(
         time_period: Time period (e.g., "1h", "30m").
         start_time: Start time (ISO format).
         end_time: End time (ISO format).
+        max_context_tokens: Maximum tokens for output (default: 50000).
 
     Returns:
         Dict[str, Any]: Keys: chunks, overall_summary, trending_patterns, recommendations, metadata.
@@ -5854,6 +5941,11 @@ async def stream_analyze_pod_logs(
 
         logger.info(f"[{tool_name}] Streaming analysis completed in {processing_time:.2f}s")
         logger.info(f"[{tool_name}] Processed {chunks_processed} chunks with {overall_summary.get('total_issues', 0)} total issues")
+
+        # Apply truncation to ensure output fits within token limit
+        results = truncate_to_token_limit(results, max_context_tokens)
+        if results.get('_truncated'):
+            logger.info(f"[{tool_name}] Output truncated to fit within {max_context_tokens} token limit")
 
         return results
 
