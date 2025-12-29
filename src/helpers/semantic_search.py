@@ -194,8 +194,8 @@ def extract_k8s_entities(query: str) -> List[str]:
         'clustertask': ['clustertask', 'clustertasks']
     }
 
-    # Konflux/OpenShift specific
-    konflux_entities = {
+    # CI/CD and OpenShift specific
+    cicd_entities = {
         'application': ['application', 'applications', 'app'],
         'component': ['component', 'components'],
         'integration': ['integration', 'integrations'],
@@ -203,7 +203,7 @@ def extract_k8s_entities(query: str) -> List[str]:
         'snapshot': ['snapshot', 'snapshots']
     }
 
-    all_entities = {**k8s_entities, **tekton_entities, **konflux_entities}
+    all_entities = {**k8s_entities, **tekton_entities, **cicd_entities}
 
     identified = []
     for entity_type, aliases in all_entities.items():
@@ -606,7 +606,7 @@ async def _get_target_namespaces(
     clusters: Optional[List[str]],
     identified_components: List[str],
     list_namespaces,
-    detect_konflux_namespaces
+    detect_tekton_namespaces_func
 ) -> List[str]:
     """Determine target namespaces based on clusters and identified components."""
     if clusters:
@@ -617,10 +617,10 @@ async def _get_target_namespaces(
     all_namespaces = await list_namespaces()
 
     if not identified_components:
-        # If no specific components, focus on Konflux-related namespaces
-        konflux_namespaces = await detect_konflux_namespaces()
+        # If no specific components, focus on Tekton/CI-CD related namespaces
+        tekton_namespaces = await detect_tekton_namespaces_func()
         target_namespaces = []
-        for ns_list in konflux_namespaces.values():
+        for ns_list in tekton_namespaces.values():
             target_namespaces.extend(ns_list)
 
         # Add some common system namespaces
@@ -720,7 +720,7 @@ async def _search_events_semantically(
     namespace: str,
     query_interpretation: Dict[str, Any],
     search_params: Dict[str, Any],
-    get_konflux_events,
+    get_namespace_events_func,
     calc_semantic_relevance_func,
     identify_match_reasons_func,
     extract_log_metadata_func
@@ -732,7 +732,7 @@ async def _search_events_semantically(
     results = []
 
     try:
-        events_response = await get_konflux_events(namespace)
+        events_response = await get_namespace_events_func(namespace)
         events = events_response.get('events', [])
 
         if not events:

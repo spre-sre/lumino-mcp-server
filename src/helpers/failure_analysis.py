@@ -21,7 +21,7 @@ from .constants import PIPELINE_ANALYSIS_CONFIG
 
 async def identify_failure_context(
     failure_identifier: str,
-    detect_konflux_namespaces_func,
+    detect_tekton_namespaces_func,
     k8s_custom_api,
     k8s_core_api,
     logger
@@ -29,9 +29,9 @@ async def identify_failure_context(
     """Identify the type and context of the failure."""
     try:
         # Try to find in different namespaces and types
-        konflux_namespaces = await detect_konflux_namespaces_func()
+        tekton_namespaces = await detect_tekton_namespaces_func()
         all_namespaces = []
-        for category in konflux_namespaces.values():
+        for category in tekton_namespaces.values():
             all_namespaces.extend(category)
 
         # Check if it's a pipeline run
@@ -138,7 +138,7 @@ async def analyze_pod_failure(
     get_pod_logs_func,
     analyze_logs_func,
     detect_log_anomalies_func,
-    get_konflux_events_func,
+    get_namespace_events_func,
     logger
 ) -> Dict[str, Any]:
     """Perform detailed analysis of a failed pod."""
@@ -178,7 +178,7 @@ async def analyze_pod_failure(
 
         if depth in ["standard", "deep"]:
             # Get related events
-            events = await get_konflux_events_func(namespace)
+            events = await get_namespace_events_func(namespace)
             analysis["events_analysis"] = events
 
         return analysis
@@ -191,7 +191,7 @@ async def analyze_generic_failure(
     namespace: str,
     identifier: str,
     depth: str,
-    get_konflux_events_func,
+    get_namespace_events_func,
     logger
 ) -> Dict[str, Any]:
     """Perform generic failure analysis."""
@@ -205,7 +205,7 @@ async def analyze_generic_failure(
         }
 
         # Get namespace events
-        events = await get_konflux_events_func(namespace)
+        events = await get_namespace_events_func(namespace)
         analysis["events_analysis"] = events
 
         return analysis
@@ -222,7 +222,7 @@ async def build_failure_timeline(
     namespace: str,
     identifier: str,
     time_hours: int,
-    get_konflux_events_func,
+    get_namespace_events_func,
     logger
 ) -> List[Dict[str, str]]:
     """Build a detailed timeline of events leading to failure."""
@@ -230,7 +230,7 @@ async def build_failure_timeline(
         timeline = []
 
         # Get namespace events
-        events_data = await get_konflux_events_func(namespace)
+        events_data = await get_namespace_events_func(namespace)
 
         # Convert events to timeline format
         if "events" in events_data:

@@ -973,7 +973,7 @@ def recommend_actions(analysis_results: Dict[str, Any]) -> List[str]:
         ])
     elif "permission" in root_cause.lower() or "authorization" in root_cause.lower():
         recommendations.extend([
-            "Review RBAC permissions for service accounts used by Konflux",
+            "Review RBAC permissions for service accounts used by Tekton pipelines",
             "Check if appropriate ClusterRoles and RoleBindings are in place",
             "Verify service account tokens are mounted correctly",
             "Check for recent changes to RBAC policies"
@@ -983,7 +983,7 @@ def recommend_actions(analysis_results: Dict[str, Any]) -> List[str]:
             "Check ConfigMaps and Secrets referenced by pipelines",
             "Verify pipeline parameters are correctly specified",
             "Review task definitions for correctness",
-            "Check Konflux configuration for inconsistencies"
+            "Check CI/CD pipeline configuration for inconsistencies"
         ])
     elif "dependency" in root_cause.lower():
         recommendations.extend([

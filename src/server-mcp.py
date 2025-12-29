@@ -586,17 +586,16 @@ async def list_namespaces() -> List[str]:
         return []
 
 
-# @mcp.tool()  # Commented out - Konflux-specific tool
-async def detect_konflux_namespaces() -> Dict[str, List[str]]:
+async def detect_tekton_namespaces() -> Dict[str, List[str]]:
     """
-    Intelligently identifies and categorizes namespaces related to the Konflux-CI ecosystem.
+    Intelligently identifies and categorizes namespaces related to Tekton/CI-CD ecosystems.
 
     This tool performs advanced pattern matching to detect and classify namespaces that are part of
-    or related to the Konflux-CI continuous integration system. It uses a hierarchical classification
+    or related to Tekton-based CI/CD systems. It uses a hierarchical classification
     system to organize namespaces by their functional role within the CI/CD pipeline infrastructure.
 
     The detection algorithm uses pattern matching against namespace names to identify:
-    - Core Konflux components and services
+    - Core Tekton components and services
     - Tekton pipeline and task execution environments
     - Build and compilation workspaces
     - Integration and deployment namespaces
@@ -604,29 +603,29 @@ async def detect_konflux_namespaces() -> Dict[str, List[str]]:
 
     Returns:
         Dict[str, List[str]]: Categorized namespace collections with the following structure:
-            - "core_konflux": Namespaces containing "konflux" (primary system components)
-            - "tekton_related": Namespaces containing "tekton" (pipeline execution engine)
+            - "core_tekton": Namespaces containing "tekton" (primary system components)
+            - "tekton_related": Namespaces containing tekton-related patterns
             - "pipeline_related": Namespaces containing "pipeline" (CI/CD workflows)
             - "build_related": Namespaces containing "build" (compilation and packaging)
-            - "other_relevant": Namespaces matching other Konflux ecosystem patterns
+            - "other_relevant": Namespaces matching other CI/CD ecosystem patterns
     """
     try:
-        logger.info("Starting Konflux-CI namespace detection and classification")
+        logger.info("Starting Tekton/CI-CD namespace detection and classification")
         all_namespaces = await list_namespaces()
 
         if not all_namespaces:
             logger.warning("No namespaces retrieved from cluster - returning empty classification")
             return {
-                "core_konflux": [],
+                "core_tekton": [],
                 "tekton_related": [],
                 "pipeline_related": [],
                 "build_related": [],
                 "other_relevant": []
             }
 
-        # Define comprehensive patterns for Konflux ecosystem detection
-        konflux_patterns = [
-            "konflux", "tekton", "pipeline", "build", "ci", "cd",
+        # Define comprehensive patterns for CI/CD ecosystem detection
+        cicd_patterns = [
+            "tekton", "pipeline", "build", "ci", "cd",
             "openshift-pipelines", "build-service", "release-service",
             "image-controller", "integration-service", "namespace-lister",
             "pipelines-as-code", "smee-client", "tekton-operator",
@@ -634,7 +633,7 @@ async def detect_konflux_namespaces() -> Dict[str, List[str]]:
         ]
 
         result = {
-            "core_konflux": [],
+            "core_tekton": [],
             "tekton_related": [],
             "pipeline_related": [],
             "build_related": [],
@@ -645,20 +644,16 @@ async def detect_konflux_namespaces() -> Dict[str, List[str]]:
         classification_stats = {category: 0 for category in result.keys()}
         unclassified_count = 0
 
-        logger.info(f"Classifying {len(all_namespaces)} namespaces using {len(konflux_patterns)} patterns")
+        logger.info(f"Classifying {len(all_namespaces)} namespaces using {len(cicd_patterns)} patterns")
 
         for ns in all_namespaces:
             ns_lower = ns.lower()
             classified = False
 
             # Priority-based classification (order matters)
-            if "konflux" in ns_lower:
-                result["core_konflux"].append(ns)
-                classification_stats["core_konflux"] += 1
-                classified = True
-            elif "tekton" in ns_lower:
-                result["tekton_related"].append(ns)
-                classification_stats["tekton_related"] += 1
+            if "tekton" in ns_lower:
+                result["core_tekton"].append(ns)
+                classification_stats["core_tekton"] += 1
                 classified = True
             elif "pipeline" in ns_lower:
                 result["pipeline_related"].append(ns)
@@ -668,7 +663,7 @@ async def detect_konflux_namespaces() -> Dict[str, List[str]]:
                 result["build_related"].append(ns)
                 classification_stats["build_related"] += 1
                 classified = True
-            elif any(pattern in ns_lower for pattern in konflux_patterns):
+            elif any(pattern in ns_lower for pattern in cicd_patterns):
                 result["other_relevant"].append(ns)
                 classification_stats["other_relevant"] += 1
                 classified = True
@@ -682,7 +677,7 @@ async def detect_konflux_namespaces() -> Dict[str, List[str]]:
 
         # Log classification statistics
         total_classified = sum(classification_stats.values())
-        logger.info(f"Namespace classification complete: {total_classified} Konflux-related, "
+        logger.info(f"Namespace classification complete: {total_classified} CI/CD-related, "
                    f"{unclassified_count} other namespaces")
 
         for category, count in classification_stats.items():
@@ -692,10 +687,10 @@ async def detect_konflux_namespaces() -> Dict[str, List[str]]:
         return result
 
     except Exception as e:
-        logger.error(f"Unexpected error during Konflux namespace detection: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected error during Tekton namespace detection: {str(e)}", exc_info=True)
         # Return empty but consistent structure on error
         return {
-            "core_konflux": [],
+            "core_tekton": [],
             "tekton_related": [],
             "pipeline_related": [],
             "build_related": [],
@@ -2027,22 +2022,22 @@ async def get_konflux_components_status() -> Dict[str, Any]:
         logger.info("Retrieving Konflux components status across all namespaces")
 
         # First identify all Konflux namespaces
-        konflux_namespaces = await detect_konflux_namespaces()
+        tekton_namespaces = await detect_tekton_namespaces()
 
         # Initialize results
         results = {
-            "namespaces": konflux_namespaces,
+            "namespaces": tekton_namespaces,
             "components": {},
             "pipeline_stats": {},
             "resource_usage": {}
         }
 
         # Count total namespaces for logging
-        total_namespaces = sum(len(ns_list) for ns_list in konflux_namespaces.values())
+        total_namespaces = sum(len(ns_list) for ns_list in tekton_namespaces.values())
         logger.info(f"Found {total_namespaces} Konflux-related namespaces to analyze")
 
         # For each Konflux namespace, get key resources
-        for namespace_type, namespaces in konflux_namespaces.items():
+        for namespace_type, namespaces in tekton_namespaces.items():
             for namespace in namespaces:
                 # Get deployments
                 try:
@@ -2441,9 +2436,9 @@ async def track_pipeline_across_namespaces(pipeline_id: str) -> Dict[str, Any]:
         logger.info(f"Tracking pipeline '{pipeline_id}' across all namespaces")
 
         # Get all relevant namespaces
-        konflux_namespaces = await detect_konflux_namespaces()
+        tekton_namespaces = await detect_tekton_namespaces()
         all_namespaces = []
-        for ns_list in konflux_namespaces.values():
+        for ns_list in tekton_namespaces.values():
             all_namespaces.extend(ns_list)
 
         logger.info(f"Searching {len(all_namespaces)} namespaces for pipeline '{pipeline_id}'")
@@ -5443,9 +5438,9 @@ async def investigate_tls_certificate_issues(
                     'monitoring', 'logging', 'registry', 'authentication'
                 ])
             ]
-            # Add some konflux namespaces
-            konflux_ns = await detect_konflux_namespaces()
-            for category in konflux_ns.values():
+            # Add some Tekton/CI-CD namespaces
+            tekton_ns = await detect_tekton_namespaces()
+            for category in tekton_ns.values():
                 system_namespaces.extend(category[:3])  # Top 3 from each category
 
             # Remove duplicates and limit
@@ -6932,7 +6927,7 @@ async def automated_triage_rca_report_generator(
             time_hours = int(time_window[:-1]) / 60
 
         # Step 1: Identify failure type and locate namespace
-        failure_context = await identify_failure_context(failure_identifier, detect_konflux_namespaces, k8s_custom_api, k8s_core_api, logger)
+        failure_context = await identify_failure_context(failure_identifier, detect_tekton_namespaces, k8s_custom_api, k8s_core_api, logger)
         if not failure_context["found"]:
             report["investigation_summary"]["failure_type"] = "Not Found"
             report["investigation_summary"]["severity"] = "Low"
@@ -6946,14 +6941,14 @@ async def automated_triage_rca_report_generator(
         if failure_type == "pipelinerun":
             primary_analysis = await analyze_pipeline_failure(namespace, failure_identifier, investigation_depth, analyze_failed_pipeline, analyze_pipeline_performance, get_pod_logs, analyze_logs, detect_log_anomalies, analyze_pipeline_dependencies, logger)
         elif failure_type == "pod":
-            primary_analysis = await analyze_pod_failure(namespace, failure_identifier, investigation_depth, k8s_core_api, get_pod_logs, analyze_logs, detect_log_anomalies, get_konflux_events, logger)
+            primary_analysis = await analyze_pod_failure(namespace, failure_identifier, investigation_depth, k8s_core_api, get_pod_logs, analyze_logs, detect_log_anomalies, smart_get_namespace_events, logger)
         else:
-            primary_analysis = await analyze_generic_failure(namespace, failure_identifier, investigation_depth, get_konflux_events, logger)
+            primary_analysis = await analyze_generic_failure(namespace, failure_identifier, investigation_depth, smart_get_namespace_events, logger)
 
         # Step 3: Build failure timeline
         timeline_events = []
         if generate_timeline:
-            timeline_events = await build_failure_timeline(namespace, failure_identifier, time_hours, get_konflux_events, logger)
+            timeline_events = await build_failure_timeline(namespace, failure_identifier, time_hours, smart_get_namespace_events, logger)
             report["failure_timeline"] = timeline_events
 
         # Step 4: Correlate with related failures
@@ -9570,7 +9565,7 @@ async def semantic_log_search(
 
         # === Build Search Parameters ===
         search_params = {
-            'namespaces': await _get_target_namespaces(clusters, identified_components, list_namespaces, detect_konflux_namespaces),
+            'namespaces': await _get_target_namespaces(clusters, identified_components, list_namespaces, detect_tekton_namespaces),
             'time_range': time_range,
             'severity_levels': severity_levels or ['error', 'warn', 'info', 'debug'],
             'max_results': max_results,
@@ -9608,7 +9603,7 @@ async def semantic_log_search(
                 try:
                     events_result = await _search_events_semantically(
                         namespace, query_interpretation, search_params,
-                        get_konflux_events, calculate_semantic_relevance,
+                        smart_get_namespace_events, calculate_semantic_relevance,
                         identify_match_reasons, extract_log_metadata
                     )
                     if events_result:
