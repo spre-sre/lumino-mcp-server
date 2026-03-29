@@ -30,6 +30,10 @@ An open source MCP (Model Context Protocol) server empowering SREs with intellig
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/spre-sre-lumino-mcp-server).
+
 ## Overview
 
 LUMINO MCP Server transforms how Site Reliability Engineers (SREs) and DevOps teams interact with Kubernetes clusters. By exposing 37 specialized tools through the Model Context Protocol, it enables AI assistants to:
