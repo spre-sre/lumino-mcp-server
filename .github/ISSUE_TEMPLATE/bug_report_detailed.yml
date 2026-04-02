@@ -1,0 +1,188 @@
+name: "🐛 Bug Report (Detailed)"
+description: "Report a reproducible bug in lumino-mcp-server using a structured form."
+title: "[BUG] <short description>"
+labels: ["bug", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Thank you for taking the time to file a bug report!
+        Please fill in as much detail as possible so we can reproduce and fix the issue quickly.
+        For **security vulnerabilities**, please use the [Security Advisory](https://github.com/spre-sre/lumino-mcp-server/security/advisories/new) instead.
+
+  # ── Affected Tool / Component ──────────────────────────────────────────────
+  - type: dropdown
+    id: component
+    attributes:
+      label: "Affected Component"
+      description: "Which part of lumino-mcp-server is affected?"
+      multiple: true
+      options:
+        - "MCP Tool – pipeline_tracer"
+        - "MCP Tool – analyze_failed_pipeline"
+        - "MCP Tool – advanced_event_analytics"
+        - "MCP Tool – semantic_log_search"
+        - "MCP Tool – investigate_tls_certificate_issues"
+        - "MCP Tool – check_cluster_certificate_health"
+        - "MCP Tool – resource_bottleneck_forecaster"
+        - "MCP Tool – predictive_log_analyzer"
+        - "MCP Tool – detect_anomalies"
+        - "MCP Tool – conservative_namespace_overview"
+        - "MCP Tool – adaptive_namespace_investigation"
+        - "MCP Tool – list_pods_in_namespace"
+        - "MCP Tool – get_kubernetes_resource"
+        - "MCP Tool – prometheus_query"
+        - "MCP Tool – other (specify in description)"
+        - "Helper – event_analysis.py"
+        - "Helper – failure_analysis.py"
+        - "Helper – log_analysis.py"
+        - "Helper – ml_persistence.py"
+        - "Helper – resource_topology.py"
+        - "Helper – semantic_search.py"
+        - "Helper – utils.py"
+        - "Helper – constants.py"
+        - "Server entrypoint – server-mcp.py / main.py"
+        - "CI/CD – GitHub Actions workflow"
+        - "Container – Containerfile"
+        - "Documentation"
+        - "Other"
+    validations:
+      required: true
+
+  # ── Severity ────────────────────────────────────────────────────────────────
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity"
+      description: "How severe is the impact of this bug?"
+      options:
+        - "🔴 Critical – data loss, crash, or complete tool failure"
+        - "🟠 High – major feature broken, no workaround"
+        - "🟡 Medium – feature partially broken, workaround exists"
+        - "🟢 Low – cosmetic or minor inconvenience"
+    validations:
+      required: true
+
+  # ── Environment ─────────────────────────────────────────────────────────────
+  - type: input
+    id: lumino_version
+    attributes:
+      label: "lumino-mcp-server version / commit SHA"
+      placeholder: "e.g. v0.4.2 or 960ccfc"
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: "Python version"
+      placeholder: "e.g. 3.11.9"
+    validations:
+      required: true
+
+  - type: input
+    id: k8s_version
+    attributes:
+      label: "Kubernetes / OpenShift version"
+      placeholder: "e.g. OpenShift 4.15 / k8s 1.28"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: deployment_mode
+    attributes:
+      label: "Deployment mode"
+      options:
+        - "Local (uvx / python -m)"
+        - "Container (Containerfile)"
+        - "Claude Desktop"
+        - "Other MCP client"
+    validations:
+      required: true
+
+  # ── Bug Description ─────────────────────────────────────────────────────────
+  - type: textarea
+    id: description
+    attributes:
+      label: "Bug Description"
+      description: "A clear and concise description of what the bug is."
+      placeholder: "When I call `pipeline_tracer` with a commit SHA, it returns an empty list even though PipelineRuns exist..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to Reproduce"
+      description: "Provide the exact steps to reproduce the bug."
+      placeholder: |
+        1. Configure lumino-mcp-server with a valid kubeconfig
+        2. Call tool `pipeline_tracer` with `{"namespace": "my-ns", "identifier": "abc1234"}`
+        3. Observe the response
+        4. Expected: list of matching PipelineRuns; Actual: `{"pipeline_runs": []}`
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected Behaviour"
+      placeholder: "The tool should return the matching PipelineRun(s) for the given commit SHA."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: "Actual Behaviour"
+      placeholder: "The tool returns an empty list. No error is raised."
+    validations:
+      required: true
+
+  # ── Evidence ────────────────────────────────────────────────────────────────
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Relevant Logs / Stack Trace"
+      description: "Paste any relevant log output or Python tracebacks here."
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: tool_response
+    attributes:
+      label: "Tool Response (JSON)"
+      description: "If applicable, paste the full JSON response returned by the MCP tool."
+      render: json
+    validations:
+      required: false
+
+  # ── Root Cause Hypothesis ───────────────────────────────────────────────────
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: "Root Cause Hypothesis (optional)"
+      description: "If you have investigated the code, share your hypothesis."
+      placeholder: "I suspect the issue is in `matches_trace_identifier()` in resource_topology.py — the commit_keys list is missing the `pac.test.appstudio.openshift.io/sha` label."
+    validations:
+      required: false
+
+  # ── Checklist ───────────────────────────────────────────────────────────────
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "Pre-submission Checklist"
+      options:
+        - label: "I have searched existing issues and this is not a duplicate."
+          required: true
+        - label: "I am using a supported Python version (≥ 3.11)."
+          required: false
+        - label: "I have included the lumino-mcp-server version or commit SHA."
+          required: true
+        - label: "I have included steps to reproduce."
+          required: true
+        - label: "This is NOT a security vulnerability (use Security Advisories for those)."
+          required: true
