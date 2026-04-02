@@ -1,8 +1,18 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
+
 contact_links:
-  - name: Documentation
-    url: https://github.com/spre-sre/lumino-mcp-server#readme
-    about: Check the README for usage instructions and troubleshooting
-  - name: Discussions
+  - name: "🔒 Security Vulnerability (Private Disclosure)"
+    url: https://github.com/spre-sre/lumino-mcp-server/security/advisories/new
+    about: "Report a security vulnerability privately via GitHub Security Advisories. Do NOT open a public issue for exploitable vulnerabilities."
+
+  - name: "💬 General Discussion / Questions"
     url: https://github.com/spre-sre/lumino-mcp-server/discussions
-    about: Ask questions and discuss ideas with the community
+    about: "Ask questions, share ideas, or discuss lumino-mcp-server usage in GitHub Discussions."
+
+  - name: "📖 Contributing Guide"
+    url: https://github.com/spre-sre/lumino-mcp-server/blob/main/CONTRIBUTING.md
+    about: "Read the contributing guide before opening a PR or issue."
+
+  - name: "📋 Code Audit Report"
+    url: https://github.com/spre-sre/lumino-mcp-server/blob/main/AUDIT_REPORT.md
+    about: "Review the full code audit report for known issues, risks, and improvement opportunities."
