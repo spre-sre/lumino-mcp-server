@@ -558,7 +558,7 @@ LUMINO acts as a bridge between AI assistants and your Kubernetes infrastructure
 │                       LUMINO MCP Server                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
 │  │ Log Analysis │  │ Event Intel  │  │  Predictive  │         │
-│  │   (6 tools)  │  │  (3 tools)   │  │  (3 tools)   │         │
+│  │   (6 tools)  │  │  (3 tools)   │  │  (2 tools)   │         │
 │  └──────────────┘  └──────────────┘  └──────────────┘         │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
 │  │   Pipeline   │  │  Simulation  │  │   Topology   │         │

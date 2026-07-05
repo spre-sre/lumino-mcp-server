@@ -311,10 +311,6 @@ if k8s_core_api is not None and k8s_custom_api is not None:
 else:
     kubearchive_endpoint_discovery = None
 
-# KubeArchive host discovery cache (Issue #8)
-_kubearchive_host_cache: Dict[str, Any] = {"host": None, "ts": 0}
-KUBEARCHIVE_CACHE_TTL_SEC = 300
-
 
 # Prometheus endpoints configuration (local Tekton components)
 PROMETHEUS_ENDPOINTS = {
