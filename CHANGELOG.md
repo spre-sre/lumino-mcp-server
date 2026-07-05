@@ -5,6 +5,34 @@ All notable changes to Lumino MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-07-05
+
+### Added
+- `query_kubearchive` tool - Query archived Kubernetes resources from KubeArchive with optional log retrieval
+- `manage_prediction_training_data` tool - Manage training data for the predictive log analyzer
+- KubeArchive integration helper (`kubearchive_integration.py`) for archived resource access
+- ML persistence helper (`ml_persistence.py`) for training data and model storage
+- Full lifecycle chain following in `pipeline_tracer` (Application and Component resolution)
+- Tekton/Konflux and OpenShift runbooks in `advanced_event_analytics`
+- Konflux resource types in `get_kubernetes_resource`
+
+### Fixed
+- SQL injection vulnerability in `ml_persistence.py` - parameterized all SQL queries (#59)
+- Prometheus bearer token now refreshed on each query to prevent stale auth (#150)
+- Async lock added to `list_namespaces` cache to prevent race conditions (#52)
+- `severity_threshold` now correctly detects WARN-level anomalies (#53)
+- `analysis_depth` parameter now maps to progressive analysis level (#54)
+- Pipeline success rate calculation, `tail_lines` handling, running task detection, and sort order (#55)
+- Two critical regressions from Phase 1: missing `await` and stale `search_pattern` reference (#36)
+- Critical bugs, removed unused parameters, and improved correctness across 30 items (#35)
+- Risk contradiction, event `time_span`, root cause misclassification, and timezone handling (#30)
+- KubeArchive 401 error when retrieving token from kubeconfig
+
+### Changed
+- Tool count updated from 37 to **39 MCP tools**
+- Documentation corrected to reflect optional ML data persistence (SQLite)
+- Architecture diagram updated to include all 9 helper modules
+
 ## [0.9.2] - 2026-01-24
 
 ### Added
@@ -38,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Core Infrastructure
-- Initial release of Lumino MCP Server with **37 MCP tools**
+- Initial release of Lumino MCP Server with **37 MCP tools** (since expanded to 39)
 - MCP (Model Context Protocol) integration for AI-powered Kubernetes operations
 - Multi-cluster support with automatic context detection
 - Prometheus integration for metrics queries

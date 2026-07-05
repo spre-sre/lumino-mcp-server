@@ -32,7 +32,7 @@ An open source MCP (Model Context Protocol) server empowering SREs with intellig
 
 ## Overview
 
-LUMINO MCP Server transforms how Site Reliability Engineers (SREs) and DevOps teams interact with Kubernetes clusters. By exposing 37 specialized tools through the Model Context Protocol, it enables AI assistants to:
+LUMINO MCP Server transforms how Site Reliability Engineers (SREs) and DevOps teams interact with Kubernetes clusters. By exposing 39 specialized tools through the Model Context Protocol, it enables AI assistants to:
 
 - **Monitor** cluster health, resources, and pipeline status in real-time
 - **Analyze** logs, events, and anomalies using statistical and ML techniques
@@ -498,12 +498,13 @@ The server automatically detects Kubernetes configuration:
 | `ci_cd_performance_baselining_tool` | Pipeline performance baselines |
 | `pipeline_tracer` | Trace pipelines by commit, PR, or image |
 
-### Topology & Prediction (2 tools)
+### Topology & Prediction (3 tools)
 
 | Tool | Description |
 |------|-------------|
 | `live_system_topology_mapper` | Real-time system topology mapping |
 | `predictive_log_analyzer` | Predict issues from log patterns |
+| `manage_prediction_training_data` | Manage training data for the predictive log analyzer |
 
 ### Simulation (1 tool)
 
@@ -517,15 +518,17 @@ The server automatically detects Kubernetes configuration:
 lumino-mcp-server/
 ├── main.py                 # Entry point with transport detection
 ├── src/
-│   ├── server-mcp.py       # MCP server with all 37 tools
+│   ├── server-mcp.py       # MCP server with all 39 tools
 │   └── helpers/
-│       ├── constants.py    # Shared constants
-│       ├── event_analysis.py    # Event processing logic
-│       ├── failure_analysis.py  # RCA algorithms
-│       ├── log_analysis.py      # Log processing
-│       ├── resource_topology.py # Topology mapping
-│       ├── semantic_search.py   # NLP search
-│       └── utils.py             # Utility functions
+│       ├── constants.py              # Shared constants
+│       ├── event_analysis.py         # Event processing logic
+│       ├── failure_analysis.py       # RCA algorithms
+│       ├── kubearchive_integration.py # KubeArchive API integration
+│       ├── log_analysis.py           # Log processing
+│       ├── ml_persistence.py         # ML model & training data persistence
+│       ├── resource_topology.py      # Topology mapping
+│       ├── semantic_search.py        # NLP search
+│       └── utils.py                  # Utility functions
 └── pyproject.toml          # Project configuration
 ```
 
@@ -555,11 +558,11 @@ LUMINO acts as a bridge between AI assistants and your Kubernetes infrastructure
 │                       LUMINO MCP Server                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
 │  │ Log Analysis │  │ Event Intel  │  │  Predictive  │         │
-│  │   (6 tools)  │  │  (3 tools)   │  │  (2 tools)   │         │
+│  │   (6 tools)  │  │  (3 tools)   │  │  (3 tools)   │         │
 │  └──────────────┘  └──────────────┘  └──────────────┘         │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
 │  │   Pipeline   │  │  Simulation  │  │   Topology   │         │
-│  │  (6 tools)   │  │  (1 tool)    │  │  (2 tools)   │         │
+│  │  (6 tools)   │  │  (1 tool)    │  │  (1 tool)    │         │
 │  └──────────────┘  └──────────────┘  └──────────────┘         │
 └────────────────────────────┬────────────────────────────────────┘
                              │
@@ -591,7 +594,7 @@ LUMINO acts as a bridge between AI assistants and your Kubernetes infrastructure
 
 ### Key Features
 
-- **Stateless Design** - No data persistence, queries cluster in real-time
+- **Mostly Stateless Design** - Queries cluster in real-time; optional ML training data persisted locally via SQLite
 - **Automatic Transport Detection** - Switches between stdio (local) and HTTP (K8s) modes
 - **Token Budget Management** - Adaptive strategies to handle large log volumes
 - **Intelligent Caching** - Smart caching for frequently accessed data
@@ -951,7 +954,7 @@ uv run python main.py
 Expected output:
 ```
 MCP Server running in stdio mode
-Available tools: 37
+Available tools: 39
 Waiting for requests...
 ```
 
@@ -1069,7 +1072,7 @@ LUMINO uses intelligent caching for frequently accessed data:
 
 - **15-minute cache** - For web-fetched content
 - **Session cache** - For hybrid log analysis
-- **No persistence** - All data queries cluster in real-time
+- **Minimal persistence** - Cluster queries are real-time; ML training data optionally persisted via SQLite
 
 ### Concurrent Requests
 
@@ -1089,7 +1092,7 @@ The server handles multiple concurrent requests efficiently:
 | Kubernetes | 200m-1 | 512Mi-1Gi | Minimal |
 | High-load | 1-2 | 1-2Gi | Minimal |
 
-**Note**: LUMINO is stateless and requires minimal resources. Most processing happens in the AI assistant.
+**Note**: LUMINO is mostly stateless and requires minimal resources. Most processing happens in the AI assistant. Optional ML training data is persisted locally via SQLite.
 
 ## Troubleshooting
 
