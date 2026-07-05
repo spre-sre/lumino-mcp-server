@@ -1869,8 +1869,6 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
         status = "Healthy"
         summary_parts = []
 
-        len(resource_issues) + len(pending_pods) + len(oom_killed_pods)
-
         if oom_killed_pods:
             status = "Critical"
             summary_parts.append(f"{len(oom_killed_pods)} OOMKilled containers")
