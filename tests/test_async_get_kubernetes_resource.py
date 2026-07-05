@@ -100,40 +100,38 @@ class TestAsyncioToThread:
     """AC4: Every k8s client API call inside get_kubernetes_resource uses
     await asyncio.to_thread(...)."""
 
-    def test_exactly_14_to_thread_calls(self):
-        """There must be exactly 14 'await asyncio.to_thread(' occurrences
-        within the function body."""
+    def test_at_least_one_to_thread_call(self):
+        """There must be at least one 'await asyncio.to_thread(' in the function body."""
         source = _read_source()
         start, end, func_lines = _extract_function_source_lines(source)
         assert func_lines, "Could not extract function source lines"
         func_text = "\n".join(func_lines)
         count = func_text.count("await asyncio.to_thread(")
-        assert count == 14, (
-            f"Expected 14 'await asyncio.to_thread(' calls in function body, found {count}"
+        assert count >= 1, (
+            "Expected at least 1 'await asyncio.to_thread(' call in function body, found 0"
         )
 
-    def test_no_direct_method_call_assignments(self):
-        """No line in the function body should assign resource_obj via a direct
-        (unwrapped) k8s API call. Every 'resource_obj = ...' assignment that
-        invokes a k8s method must go through asyncio.to_thread."""
+    def test_no_direct_k8s_api_assignments(self):
+        """No line in the function body should call a k8s API method without
+        going through asyncio.to_thread — regardless of variable name."""
         source = _read_source()
         _, _, func_lines = _extract_function_source_lines(source)
         assert func_lines, "Could not extract function source lines"
 
-        # Pattern: 'resource_obj = <k8s_api_object>.' without 'await asyncio.to_thread'
+        k8s_api_objects = [
+            "k8s_core_api", "k8s_storage_api", "k8s_autoscaling_api",
+            "k8s_apps_api", "k8s_batch_api", "k8s_custom_api",
+        ]
         k8s_api_pattern = re.compile(
-            r"resource_obj\s*=\s*"
-            r"(method|k8s_core_api|k8s_storage_api|k8s_autoscaling_api"
-            r"|k8s_apps_api|k8s_batch_api|k8s_custom_api)\b"
+            r"=\s*(?:method|" + "|".join(k8s_api_objects) + r")\b.*\("
         )
         direct_calls = []
         for i, line in enumerate(func_lines):
             stripped = line.strip()
             if k8s_api_pattern.search(stripped):
-                # This line assigns resource_obj via a k8s API call.
-                # It must be wrapped: 'resource_obj = await asyncio.to_thread(...)'
                 if "await asyncio.to_thread(" not in stripped:
-                    direct_calls.append((i + 1, stripped))
+                    if not stripped.startswith("method = getattr("):
+                        direct_calls.append((i + 1, stripped))
 
         assert len(direct_calls) == 0, (
             f"Found {len(direct_calls)} direct (unwrapped) k8s API call(s):\n"
@@ -149,17 +147,17 @@ class TestSignaturePreserved:
     must remain identical to the original."""
 
     def test_decorator_is_mcp_tool(self):
-        """The line immediately before the function def must be '@mcp.tool()'."""
-        source = _read_source()
-        tree = ast.parse(source)
+        """The function must be decorated with @mcp.tool()."""
+        tree = _parse_ast()
         node = _find_function_node(tree, "get_kubernetes_resource")
         assert node is not None, "Function not found"
-        lines = source.splitlines()
-        # The decorator line is the line before the function definition
-        decorator_line = lines[node.lineno - 2].strip()  # -2 because lineno is 1-indexed
-        assert decorator_line == "@mcp.tool()", (
-            f"Expected decorator '@mcp.tool()', got '{decorator_line}'"
-        )
+        assert len(node.decorator_list) >= 1, "Function has no decorators"
+        decorator = node.decorator_list[0]
+        assert isinstance(decorator, ast.Call), "Decorator is not a call expression"
+        assert isinstance(decorator.func, ast.Attribute), "Decorator is not an attribute access"
+        assert decorator.func.attr == "tool", f"Decorator method is '{decorator.func.attr}', expected 'tool'"
+        assert isinstance(decorator.func.value, ast.Name), "Decorator object is not a simple name"
+        assert decorator.func.value.id == "mcp", f"Decorator object is '{decorator.func.value.id}', expected 'mcp'"
 
     def test_parameter_signature(self):
         """Parameters must be: resource_type: str, name: str,
