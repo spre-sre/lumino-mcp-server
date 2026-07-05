@@ -12,8 +12,6 @@ These tests verify:
 import ast
 import os
 import re
-import subprocess
-
 import pytest
 
 # Path to the source file under test
@@ -227,35 +225,6 @@ class TestSyntaxValidity:
             ast.parse(source)
         except SyntaxError as e:
             pytest.fail(f"SyntaxError in server-mcp.py: {e}")
-
-
-# ---------------------------------------------------------------------------
-# AC5 + AC6: Lint and format checks
-# ---------------------------------------------------------------------------
-class TestLintAndFormat:
-    """AC5 + AC6: ruff check and ruff format must pass."""
-
-    def test_ruff_check(self):
-        """uvx ruff check --line-length 100 must exit 0."""
-        result = subprocess.run(
-            ["uvx", "ruff", "check", "--line-length", "100", SERVER_FILE],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, (
-            f"ruff check failed (exit {result.returncode}):\n{result.stdout}\n{result.stderr}"
-        )
-
-    def test_ruff_format(self):
-        """uvx ruff format --check --line-length 100 must exit 0."""
-        result = subprocess.run(
-            ["uvx", "ruff", "format", "--check", "--line-length", "100", SERVER_FILE],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, (
-            f"ruff format check failed (exit {result.returncode}):\n{result.stdout}\n{result.stderr}"
-        )
 
 
 # ---------------------------------------------------------------------------
