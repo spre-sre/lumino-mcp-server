@@ -18,6 +18,9 @@ An open source MCP (Model Context Protocol) server empowering SREs with intellig
 - [Installation](#installation)
 - [Usage Examples](#usage-examples)
 - [Configuration](#configuration)
+- [ML Model Persistence](#ml-model-persistence)
+- [KubeArchive Integration](#kubearchive-integration)
+- [Prometheus/Thanos Integration](#prometheusthanos-integration)
 - [Available Tools](#available-tools)
 - [Architecture](#architecture)
 - [How It Works](#how-it-works)
@@ -32,7 +35,7 @@ An open source MCP (Model Context Protocol) server empowering SREs with intellig
 
 ## Overview
 
-LUMINO MCP Server transforms how Site Reliability Engineers (SREs) and DevOps teams interact with Kubernetes clusters. By exposing 37 specialized tools through the Model Context Protocol, it enables AI assistants to:
+LUMINO MCP Server transforms how Site Reliability Engineers (SREs) and DevOps teams interact with Kubernetes clusters. By exposing 39 specialized tools through the Model Context Protocol, it enables AI assistants to:
 
 - **Monitor** cluster health, resources, and pipeline status in real-time
 - **Analyze** logs, events, and anomalies using statistical and ML techniques
@@ -43,6 +46,7 @@ LUMINO MCP Server transforms how Site Reliability Engineers (SREs) and DevOps te
 ## Features
 
 ### Kubernetes & OpenShift Operations
+
 - Namespace and pod management
 - Resource querying with flexible output formats
 - Label-based resource search across clusters
@@ -50,6 +54,7 @@ LUMINO MCP Server transforms how Site Reliability Engineers (SREs) and DevOps te
 - etcd log analysis
 
 ### Tekton Pipeline Intelligence
+
 - Pipeline and task run monitoring across namespaces
 - Detailed log retrieval with optional cleaning
 - Failed pipeline root cause analysis
@@ -57,6 +62,7 @@ LUMINO MCP Server transforms how Site Reliability Engineers (SREs) and DevOps te
 - CI/CD performance baselining
 
 ### Advanced Log Analysis
+
 - Smart log summarization with configurable detail levels
 - Streaming analysis for large log volumes
 - Hybrid analysis combining multiple strategies
@@ -64,6 +70,7 @@ LUMINO MCP Server transforms how Site Reliability Engineers (SREs) and DevOps te
 - Anomaly detection with severity classification
 
 ### Predictive & Proactive Monitoring
+
 - Statistical anomaly detection using z-score analysis
 - Predictive log analysis for early warning
 - Resource bottleneck forecasting
@@ -71,12 +78,14 @@ LUMINO MCP Server transforms how Site Reliability Engineers (SREs) and DevOps te
 - TLS certificate issue investigation
 
 ### Event Intelligence
+
 - Smart event retrieval with multiple strategies
 - Progressive event analysis (overview to deep-dive)
 - Advanced analytics with ML pattern detection
 - Log-event correlation
 
 ### Simulation & What-If Analysis
+
 - Monte Carlo simulation for configuration changes
 - Impact analysis before deployment
 - Risk assessment with configurable tolerance
@@ -90,7 +99,7 @@ Get started with LUMINO in under 2 minutes:
 
 Simply ask Claude Code to provision the Lumino MCP server for you by pasting this prompt:
 
-```
+```text
 Provision the Lumino MCP server as a project-local MCP integration:
 
 1. Clone the repository:
@@ -126,6 +135,7 @@ Provision the Lumino MCP server as a project-local MCP integration:
 ### For Other MCP Clients
 
 Choose your preferred installation method:
+
 - **MCPM (Recommended)**: `mcpm install @spre-sre/lumino-mcp-server`
 - **Manual Setup**: See detailed [MCP Client Integration](#mcp-client-integration) instructions
 
@@ -133,13 +143,14 @@ Choose your preferred installation method:
 
 Once installed, test with a simple query:
 
-```
+```text
 "List all namespaces in my Kubernetes cluster"
 ```
 
 ## Prerequisites
 
 ### Required
+
 - **Python 3.10 or higher** - Core runtime
 - **MCP Client** - One of:
   - [Claude Desktop](https://claude.ai/download)
@@ -148,10 +159,12 @@ Once installed, test with a simple query:
   - [Cursor IDE](https://cursor.sh/)
 
 ### For Kubernetes Features
+
 - **Kubernetes/OpenShift Access** - Valid kubeconfig with read permissions
 - **RBAC Permissions** - Ability to list pods, namespaces, and other resources
 
 ### Optional (Recommended)
+
 - **[uv](https://docs.astral.sh/uv/)** - Faster dependency management than pip
 - **[MCPM](https://github.com/spre-sre/mcpm)** - Easiest installation experience
 - **Prometheus** - For advanced metrics and forecasting features
@@ -217,15 +230,15 @@ The server automatically detects the environment and switches transport modes.
 
 Investigate and diagnose complex failures with automated analysis:
 
-```
+```text
 "Generate a comprehensive RCA report for the failed pipeline run 'build-api-pr-456' in namespace ci-cd"
 ```
 
-```
+```text
 "Analyze what caused pod crashes in namespace production over the last 6 hours and correlate with resource events"
 ```
 
-```
+```text
 "Investigate the TLS certificate issues affecting services in namespace ingress-nginx"
 ```
 
@@ -233,19 +246,19 @@ Investigate and diagnose complex failures with automated analysis:
 
 Anticipate problems before they impact your systems:
 
-```
+```text
 "Predict resource bottlenecks across all production namespaces for the next 48 hours"
 ```
 
-```
+```text
 "Analyze historical pipeline performance and detect anomalies in build times for the last 30 days"
 ```
 
-```
+```text
 "Check cluster certificate health and alert me about any certificates expiring in the next 60 days"
 ```
 
-```
+```text
 "Use predictive log analysis to identify potential failures in namespace monitoring before they occur"
 ```
 
@@ -253,15 +266,15 @@ Anticipate problems before they impact your systems:
 
 Test changes safely before applying them to production:
 
-```
+```text
 "Simulate the impact of increasing memory limits to 4Gi for all pods in namespace backend-services"
 ```
 
-```
+```text
 "Run a what-if scenario for scaling deployments to 10 replicas and analyze resource consumption"
 ```
 
-```
+```text
 "Simulate configuration changes for nginx ingress controller and assess risk to existing traffic"
 ```
 
@@ -269,15 +282,15 @@ Test changes safely before applying them to production:
 
 Understand system architecture and component relationships:
 
-```
+```text
 "Generate a live topology map of all services, deployments, and their dependencies in namespace microservices"
 ```
 
-```
+```text
 "Map the complete dependency graph for the payment-service including all connected resources"
 ```
 
-```
+```text
 "Show me the topology of components affected by the cert-manager service"
 ```
 
@@ -285,19 +298,19 @@ Understand system architecture and component relationships:
 
 Deep-dive into complex issues with multi-faceted analysis:
 
-```
+```text
 "Perform an adaptive namespace investigation for production - analyze logs, events, and resource patterns"
 ```
 
-```
+```text
 "Create a detailed investigation report for resource constraints and bottlenecks in namespace data-processing"
 ```
 
-```
+```text
 "Trace pipeline execution for commit SHA abc123def from source to deployment across all namespaces"
 ```
 
-```
+```text
 "Search logs semantically for 'authentication failures related to expired tokens' across the last 24 hours"
 ```
 
@@ -305,19 +318,19 @@ Deep-dive into complex issues with multi-faceted analysis:
 
 Optimize and troubleshoot your continuous delivery pipelines:
 
-```
+```text
 "Establish performance baselines for all Tekton pipelines and flag runs deviating by more than 2 standard deviations"
 ```
 
-```
+```text
 "Trace the complete pipeline flow for image 'api:v2.5.3' from build to production deployment"
 ```
 
-```
+```text
 "Analyze failed pipeline runs in namespace tekton-pipelines and identify common failure patterns"
 ```
 
-```
+```text
 "Compare current pipeline run times against 30-day baseline and highlight performance degradation"
 ```
 
@@ -325,15 +338,15 @@ Optimize and troubleshoot your continuous delivery pipelines:
 
 Multi-level event investigation from overview to deep-dive:
 
-```
+```text
 "Start with an overview of events in namespace kube-system, then drill down into critical issues"
 ```
 
-```
+```text
 "Perform advanced event analytics with ML pattern detection for namespace monitoring over the last 12 hours"
 ```
 
-```
+```text
 "Correlate events with pod logs to identify the root cause of CrashLoopBackOff in namespace applications"
 ```
 
@@ -341,19 +354,19 @@ Multi-level event investigation from overview to deep-dive:
 
 Stay informed about cluster health and pipeline status:
 
-```
+```text
 "Show me the status of all Tekton pipeline runs cluster-wide and highlight long-running pipelines"
 ```
 
-```
+```text
 "List all failed TaskRuns in the last hour with error details and recommended actions"
 ```
 
-```
+```text
 "Monitor OpenShift cluster operators and alert on any degraded components"
 ```
 
-```
+```text
 "Check MachineConfigPool status and show which nodes are being updated"
 ```
 
@@ -361,15 +374,15 @@ Stay informed about cluster health and pipeline status:
 
 Ensure cluster security and certificate management:
 
-```
+```text
 "Scan all namespaces for expiring certificates and generate a renewal schedule"
 ```
 
-```
+```text
 "Investigate TLS certificate issues causing handshake failures in namespace istio-system"
 ```
 
-```
+```text
 "Audit all secrets and configmaps for sensitive data exposure patterns"
 ```
 
@@ -377,15 +390,15 @@ Ensure cluster security and certificate management:
 
 Leverage machine learning for pattern detection:
 
-```
+```text
 "Use streaming log analysis to process large log volumes from namespace data-pipeline with error pattern detection"
 ```
 
-```
+```text
 "Detect anomalies in log patterns using ML analysis with medium severity threshold for namespace api-gateway"
 ```
 
-```
+```text
 "Analyze resource utilization trends using Prometheus metrics and forecast capacity needs"
 ```
 
@@ -409,6 +422,158 @@ The server automatically detects Kubernetes configuration:
 | `LOG_LEVEL` | Logging verbosity (DEBUG, INFO, WARNING, ERROR) | `INFO` | Debugging issues or reducing log noise |
 | `MCP_SERVER_LOG_LEVEL` | MCP framework log level | `INFO` | Troubleshooting MCP protocol issues |
 | `PYTHONUNBUFFERED` | Disable Python output buffering | - | Recommended for MCP clients to see real-time logs |
+| `KUBEARCHIVE_HOST` | Explicit KubeArchive API endpoint URL | Auto-detected | Custom KubeArchive endpoint or non-standard deployment |
+| `KUBEARCHIVE_ENABLED` | Enable/disable KubeArchive integration | `true` | Set to `false` to disable KubeArchive queries entirely |
+| `THANOS_URL` | Thanos Query endpoint URL (highest priority for metrics) | Auto-detected | Custom Thanos Query endpoint; takes precedence over `PROMETHEUS_URL` |
+| `PROMETHEUS_TOKEN` | Bearer token for Prometheus/Thanos authentication | Auto-detected | Explicit auth token when auto-detection fails |
+| `OPENSHIFT_TOKEN` | OpenShift bearer token for Prometheus/Thanos | Auto-detected | Alternative to `PROMETHEUS_TOKEN` for OpenShift clusters |
+| `OC_TOKEN` | OpenShift CLI token fallback | Auto-detected | Last-resort token fallback for Prometheus/Thanos auth |
+
+## ML Model Persistence
+
+The `predictive_log_analyzer` tool persists trained ML models and training data locally in `~/.lumino/`. This enables model reuse across server restarts and incremental learning from historical failure patterns.
+
+### Directory Structure
+
+```text
+~/.lumino/
+├── models/                     # Trained ML models
+│   ├── {model_id}.joblib       # Serialized model (e.g. IsolationForest via joblib)
+│   ├── {model_id}.meta.json    # Model metadata (created, last used, performance metrics)
+│   └── model_index.json        # Index tracking all models and the current active model
+└── training_data/              # Training data store
+    └── training_data.db        # SQLite database
+```
+
+Model IDs follow the pattern `predictive_log_v1_YYYYMMDD_HHMMSS`.
+
+### Training Data Database
+
+The SQLite database (`training_data.db`) contains four tables:
+
+| Table | Purpose |
+|-------|---------|
+| `log_samples` | Preprocessed log samples with extracted features, namespace, pod name, error indicators, and message entropy |
+| `failure_labels` | Failure events collected from Kubernetes events, failed PipelineRuns, and unhealthy pod statuses. Failure types include: `oom`, `crash`, `image`, `scheduling`, `storage`, `config`, `health`, `network`, `timeout`, `pipeline_failure`, `permission`, `resource_limits` |
+| `log_failure_correlations` | Time-proximity correlations between log samples and failure events (scored 0.5--1.0 based on temporal distance within a 30-minute window) |
+| `training_runs` | Training run history recording model_id, samples used, labels used, performance metrics, and completion status |
+
+All four tables include a `cluster_id` column for multi-cluster support. The cluster ID is derived from the active kubeconfig context name (e.g. `api-stone-prod-p02-hjvn-p1-openshiftapps-com:6443`) or falls back to `in-cluster-{KUBERNETES_SERVICE_HOST}` when running inside a pod.
+
+### Clearing Stale Data
+
+**Programmatic cleanup** via the `manage_prediction_training_data` tool (action `cleanup`):
+
+- `cleanup_old_models(max_age_days=30, keep_min=3)` -- removes models older than 30 days, always keeping the 3 most recent
+- `cleanup_old_data(max_age_days=90)` -- removes log samples, failure labels, and correlations older than 90 days
+
+**Manual cleanup**:
+
+```bash
+rm -rf ~/.lumino/              # Clear everything (models + training data)
+rm -rf ~/.lumino/models/       # Clear just models
+rm -rf ~/.lumino/training_data/ # Clear just training data (SQLite DB)
+```
+
+**Disk usage note**: Models accumulate over time. The default cleanup keeps models up to 30 days old with a minimum of 3 retained. Training data is kept for 90 days. Run the `manage_prediction_training_data` tool with action `cleanup` periodically to reclaim disk space.
+
+## KubeArchive Integration
+
+KubeArchive stores Kubernetes resources off-cluster and provides a REST API for historical resource states and logs. LUMINO uses KubeArchive as a fallback when pods, PipelineRuns, or TaskRuns have been garbage-collected from the live cluster. The `query_kubearchive` tool queries this archive transparently.
+
+### Endpoint Auto-Discovery
+
+The endpoint is discovered automatically using a 5-step chain (first match wins):
+
+1. **`KUBEARCHIVE_HOST` environment variable** (highest priority)
+2. **OpenShift Route** named `kubearchive-api-server` in namespaces: `kubearchive`, `product-kubearchive`, `default`
+3. **Kubernetes Ingress** named `kubearchive-api-server` in the same namespaces
+4. **Kubernetes Service** named `kubearchive-api-server` (in-cluster DNS: `https://kubearchive-api-server.<namespace>.svc.cluster.local:<port>`)
+5. **Kubeconfig-based Route inference** -- constructs candidate URLs from the API server domain (pattern: `https://kubearchive-api-server-{namespace}.apps.{cluster-domain}`) and probes `/livez`
+
+Results are cached at startup. On connection failure, the cache is cleared and re-probed on the next request.
+
+### Local Development (Port-Forwarding)
+
+When running outside the cluster, if an in-cluster Service endpoint is discovered (step 4), LUMINO automatically sets up `kubectl port-forward`:
+
+```bash
+kubectl port-forward -n {namespace} svc/kubearchive-api-server {local_port}:{remote_port}
+```
+
+- Tries ports 8081--8090, then falls back to a system-assigned port
+- The port-forward process is auto-started and auto-cleaned up on server exit
+- If `kubectl` is not available, LUMINO logs a manual fallback command for the user
+
+### Authentication
+
+KubeArchive authentication uses the following priority chain:
+
+1. Provided token (from constructor / previous session)
+2. In-cluster service account token (`/var/run/secrets/kubernetes.io/serviceaccount/token`)
+3. Existing Kubernetes client token (extracted from the API client initialized at server startup)
+4. OpenShift `oc whoami -t` token (for OpenShift clusters)
+5. Auto-created short-lived service account token (`kubectl create token`, 1-hour duration, Kubernetes only)
+
+### KubeArchive Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `KUBEARCHIVE_HOST` | Explicit KubeArchive API endpoint URL | Auto-detected |
+| `KUBEARCHIVE_ENABLED` | Set to `false` to disable KubeArchive integration | `true` |
+
+## Prometheus/Thanos Integration
+
+LUMINO auto-discovers Prometheus or Thanos Query endpoints for the `prometheus_query`, `resource_bottleneck_forecaster`, and `ci_cd_performance_baselining_tool` tools. Thanos Query implements the Prometheus HTTP API and is preferred when available since it provides a unified, deduplicated view across replicas.
+
+### Endpoint Discovery Priority
+
+| Priority | Source | Endpoint Type |
+|----------|--------|---------------|
+| 0 | `THANOS_URL` env var | thanos |
+| 1 | `PROMETHEUS_URL` env var | prometheus |
+| 2 | Predefined cluster endpoints (in code) | varies |
+| 3 | 5-minute TTL cache | cached |
+| 4 | Auto-discovery chain (see below) | detected |
+| 5 | Predefined fallback endpoints | varies |
+
+Auto-discovery order depends on runtime environment:
+
+- **In-cluster**: Thanos services --> Prometheus services --> Prometheus Operator CRD --> OpenShift Routes
+- **Local/outside cluster**: OpenShift Routes --> Thanos services --> Prometheus Operator CRD --> Prometheus services
+
+### Auto-Discovery Details
+
+**OpenShift Routes**: Searches the `openshift-monitoring` namespace. Prefers the `thanos-querier` route over `prometheus-k8s`. Falls back to any route with `prometheus` in the name. Detects protocol from TLS termination config.
+
+**Thanos Services**: Searches namespaces `openshift-monitoring`, `monitoring`, `thanos`, `observability`, `kube-prometheus`. Priority service names: `thanos-query-frontend`, `thanos-querier`, `thanos-query`. Also searches via label selectors: `app.kubernetes.io/name=thanos-query`, `app.kubernetes.io/component=query,app.kubernetes.io/name=thanos`, `app=thanos-query`, `app=thanos-querier`.
+
+**Prometheus Services**: Searches namespaces `openshift-monitoring`, `monitoring`, `prometheus`, `kube-prometheus`, `observability`. Priority service names: `prometheus-server`, `prometheus-k8s`, `prometheus`. Also searches via label selectors: `app=prometheus`, `app.kubernetes.io/name=prometheus`, `app.kubernetes.io/component=prometheus`.
+
+**Prometheus Operator CRD**: Discovers via `monitoring.coreos.com/v1` Prometheus custom resources and their associated services (pattern: `prometheus-{name}` in the same namespace).
+
+### Prometheus/Thanos Authentication
+
+Authentication for Prometheus/Thanos uses the following 5 methods in priority order:
+
+1. `oc whoami -t` -- fresh OpenShift token (most reliable for OpenShift)
+2. Re-read kubeconfig file for current token
+3. In-memory Kubernetes client config token
+4. ServiceAccount token file (`/var/run/secrets/kubernetes.io/serviceaccount/token`)
+5. Environment variables: `PROMETHEUS_TOKEN`, `OPENSHIFT_TOKEN`, `OC_TOKEN` (checked in that order)
+
+### Configuration Example
+
+```json
+{
+  "env": {
+    "THANOS_URL": "https://thanos-querier.example.com",
+    "PROMETHEUS_TOKEN": "your-bearer-token"
+  }
+}
+```
+
+**Note**: The endpoint cache has a 5-minute TTL. If you change `THANOS_URL` or `PROMETHEUS_URL` at runtime, the new value takes effect on the next query.
 
 ## Available Tools
 
@@ -498,12 +663,13 @@ The server automatically detects Kubernetes configuration:
 | `ci_cd_performance_baselining_tool` | Pipeline performance baselines |
 | `pipeline_tracer` | Trace pipelines by commit, PR, or image |
 
-### Topology & Prediction (2 tools)
+### Topology & Prediction (3 tools)
 
 | Tool | Description |
 |------|-------------|
 | `live_system_topology_mapper` | Real-time system topology mapping |
 | `predictive_log_analyzer` | Predict issues from log patterns |
+| `manage_prediction_training_data` | Manage training data for predictive log analyzer |
 
 ### Simulation (1 tool)
 
@@ -513,19 +679,21 @@ The server automatically detects Kubernetes configuration:
 
 ## Architecture
 
-```
+```text
 lumino-mcp-server/
 ├── main.py                 # Entry point with transport detection
 ├── src/
-│   ├── server-mcp.py       # MCP server with all 37 tools
+│   ├── server-mcp.py       # MCP server with all 39 tools
 │   └── helpers/
-│       ├── constants.py    # Shared constants
-│       ├── event_analysis.py    # Event processing logic
-│       ├── failure_analysis.py  # RCA algorithms
-│       ├── log_analysis.py      # Log processing
-│       ├── resource_topology.py # Topology mapping
-│       ├── semantic_search.py   # NLP search
-│       └── utils.py             # Utility functions
+│       ├── constants.py              # Shared constants
+│       ├── event_analysis.py         # Event processing logic
+│       ├── failure_analysis.py       # RCA algorithms
+│       ├── kubearchive_integration.py # KubeArchive API client & discovery
+│       ├── log_analysis.py           # Log processing
+│       ├── ml_persistence.py         # ML model & training data storage
+│       ├── resource_topology.py      # Topology mapping
+│       ├── semantic_search.py        # NLP search
+│       └── utils.py                  # Utility functions
 └── pyproject.toml          # Project configuration
 ```
 
@@ -533,7 +701,7 @@ lumino-mcp-server/
 
 LUMINO acts as a bridge between AI assistants and your Kubernetes infrastructure through the Model Context Protocol:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        AI Assistant Layer                        │
 │          (Claude Desktop, Claude Code CLI, Gemini CLI)          │
@@ -591,7 +759,7 @@ LUMINO acts as a bridge between AI assistants and your Kubernetes infrastructure
 
 ### Key Features
 
-- **Stateless Design** - No data persistence, queries cluster in real-time
+- **Minimal Local State** - Queries cluster in real-time; optional ML model persistence in `~/.lumino/` for predictive analytics (see [ML Model Persistence](#ml-model-persistence))
 - **Automatic Transport Detection** - Switches between stdio (local) and HTTP (K8s) modes
 - **Token Budget Management** - Adaptive strategies to handle large log volumes
 - **Intelligent Caching** - Smart caching for frequently accessed data
@@ -638,11 +806,13 @@ mcpm install @spre-sre/lumino-mcp-server --global
 ```
 
 **Short syntax explained**:
+
 - `@owner/repo` - Installs from GitHub (default: `https://github.com/owner/repo.git`)
 - `gl:@owner/repo` - Installs from GitLab (`https://gitlab.com/owner/repo.git`)
 - Full URL - Works with any Git repository
 
 This will:
+
 - Clone the repository to `~/.mcp/servers/lumino-mcp-server/`
 - Auto-detect Python project and install dependencies using `uv` (or pip)
 - Register with Claude Code CLI or Gemini CLI configuration automatically
@@ -936,7 +1106,7 @@ After configuring any client, test the connection:
 
 2. **Test a simple query**:
 
-```
+```text
 "List all namespaces in my Kubernetes cluster"
 ```
 
@@ -949,9 +1119,9 @@ uv run python main.py
 ```
 
 Expected output:
-```
+```text
 MCP Server running in stdio mode
-Available tools: 37
+Available tools: 39
 Waiting for requests...
 ```
 
@@ -1029,25 +1199,25 @@ LUMINO automatically manages AI context limits:
 ### Query Optimization Tips
 
 **Use Namespace Filtering**
-```
+```text
 ✅ "Analyze logs for pods in namespace production"
 ❌ "Analyze all pod logs in the cluster"
 ```
 
 **Specify Time Windows**
-```
+```text
 ✅ "Show events from the last 2 hours"
 ❌ "Show all events" (might return thousands)
 ```
 
 **Leverage Smart Tools**
-```
+```text
 ✅ "smart_summarize_pod_logs" - Adaptive analysis
 ❌ Direct log dumps - No processing
 ```
 
 **Use Progressive Analysis**
-```
+```text
 ✅ Start with "overview" → drill down to "detailed"
 ❌ Jump directly to "deep_dive" on large datasets
 ```
@@ -1069,7 +1239,7 @@ LUMINO uses intelligent caching for frequently accessed data:
 
 - **15-minute cache** - For web-fetched content
 - **Session cache** - For hybrid log analysis
-- **No persistence** - All data queries cluster in real-time
+- **ML model persistence** - Predictive models and training data stored locally in `~/.lumino/` (see [ML Model Persistence](#ml-model-persistence))
 
 ### Concurrent Requests
 
@@ -1089,20 +1259,20 @@ The server handles multiple concurrent requests efficiently:
 | Kubernetes | 200m-1 | 512Mi-1Gi | Minimal |
 | High-load | 1-2 | 1-2Gi | Minimal |
 
-**Note**: LUMINO is stateless and requires minimal resources. Most processing happens in the AI assistant.
+**Note**: LUMINO requires minimal resources. ML models and training data are persisted locally in `~/.lumino/` (see [ML Model Persistence](#ml-model-persistence)). Most processing happens in the AI assistant.
 
 ## Troubleshooting
 
 ### Common Issues
 
 **No Kubernetes cluster found**
-```
+```text
 Error: Unable to load kubeconfig
 ```
 Ensure you have a valid kubeconfig at `~/.kube/config` or are running inside a cluster.
 
 **Permission denied for resources**
-```
+```text
 Error: Forbidden - User cannot list resource
 ```
 Check your RBAC permissions. The server needs read access to the resources you want to query.
