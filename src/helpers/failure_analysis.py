@@ -10,7 +10,6 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from kubernetes.client.rest import ApiException
 
-from .constants import PIPELINE_ANALYSIS_CONFIG
 
 # These functions will need K8s API clients and other function dependencies passed as parameters
 # k8s_core_api, k8s_custom_api, and various analysis functions are expected to be available
@@ -19,13 +18,14 @@ from .constants import PIPELINE_ANALYSIS_CONFIG
 # FAILURE CONTEXT IDENTIFICATION
 # ============================================================================
 
+
 async def identify_failure_context(
     failure_identifier: str,
     detect_tekton_namespaces_func,
     k8s_custom_api,
     k8s_core_api,
     logger,
-    namespace: str = None
+    namespace: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Identify the type and context of the failure.
 
@@ -52,17 +52,27 @@ async def identify_failure_context(
         for ns in all_namespaces:
             try:
                 pipeline_run = k8s_custom_api.get_namespaced_custom_object(
-                    group="tekton.dev", version="v1", namespace=ns,
-                    plural="pipelineruns", name=failure_identifier
+                    group="tekton.dev",
+                    version="v1",
+                    namespace=ns,
+                    plural="pipelineruns",
+                    name=failure_identifier,
                 )
-                return {"found": True, "type": "pipelinerun", "namespace": ns, "object": pipeline_run}
+                return {
+                    "found": True,
+                    "type": "pipelinerun",
+                    "namespace": ns,
+                    "object": pipeline_run,
+                }
             except ApiException:
                 continue
 
         # Check if it's a pod
         for ns in all_namespaces:
             try:
-                pod = k8s_core_api.read_namespaced_pod(name=failure_identifier, namespace=ns)
+                pod = k8s_core_api.read_namespaced_pod(
+                    name=failure_identifier, namespace=ns
+                )
                 return {"found": True, "type": "pod", "namespace": ns, "object": pod}
             except ApiException:
                 continue
@@ -71,10 +81,18 @@ async def identify_failure_context(
         for ns in all_namespaces:
             try:
                 task_run = k8s_custom_api.get_namespaced_custom_object(
-                    group="tekton.dev", version="v1", namespace=ns,
-                    plural="taskruns", name=failure_identifier
+                    group="tekton.dev",
+                    version="v1",
+                    namespace=ns,
+                    plural="taskruns",
+                    name=failure_identifier,
                 )
-                return {"found": True, "type": "taskrun", "namespace": ns, "object": task_run}
+                return {
+                    "found": True,
+                    "type": "taskrun",
+                    "namespace": ns,
+                    "object": task_run,
+                }
             except ApiException:
                 continue
 
@@ -84,11 +102,13 @@ async def identify_failure_context(
                 events = k8s_core_api.list_namespaced_event(
                     namespace=ns,
                     field_selector=f"involvedObject.name={failure_identifier}",
-                    limit=5
+                    limit=5,
                 )
                 if events.items:
                     involved_kind = events.items[0].involved_object.kind or "unknown"
-                    logger.info(f"Resource '{failure_identifier}' not found directly but has {len(events.items)} events in {ns} (kind: {involved_kind})")
+                    logger.info(
+                        f"Resource '{failure_identifier}' not found directly but has {len(events.items)} events in {ns} (kind: {involved_kind})"
+                    )
                     return {
                         "found": True,
                         "type": involved_kind.lower(),
@@ -101,10 +121,12 @@ async def identify_failure_context(
                                 "reason": e.reason,
                                 "message": (e.message or "")[:200],
                                 "type": e.type,
-                                "last_timestamp": e.last_timestamp.isoformat() if e.last_timestamp else None,
+                                "last_timestamp": e.last_timestamp.isoformat()
+                                if e.last_timestamp
+                                else None,
                             }
                             for e in events.items
-                        ]
+                        ],
                     }
             except ApiException:
                 continue
@@ -116,16 +138,18 @@ async def identify_failure_context(
             "namespace": namespace,
             "object": None,
             "namespaces_searched": namespaces_searched,
-            "search_note": f"Resource '{failure_identifier}' not found as PipelineRun, Pod, or TaskRun in {len(all_namespaces)} namespace(s). It may have been garbage collected and events expired."
+            "search_note": f"Resource '{failure_identifier}' not found as PipelineRun, Pod, or TaskRun in {len(all_namespaces)} namespace(s). It may have been garbage collected and events expired.",
         }
 
     except Exception as e:
         logger.error(f"Error identifying failure context: {str(e)}")
         return {"found": False, "type": "error", "namespace": None, "object": None}
 
+
 # ============================================================================
 # SPECIFIC FAILURE ANALYSIS FUNCTIONS
 # ============================================================================
+
 
 async def analyze_pipeline_failure(
     namespace: str,
@@ -137,7 +161,7 @@ async def analyze_pipeline_failure(
     analyze_logs_func,
     detect_log_anomalies_func,
     analyze_pipeline_dependencies_func,
-    logger
+    logger,
 ) -> Dict[str, Any]:
     """Perform detailed analysis of a failed pipeline."""
     try:
@@ -149,7 +173,7 @@ async def analyze_pipeline_failure(
             "basic_analysis": basic_analysis,
             "logs_analyzed": {},
             "performance_data": {},
-            "dependency_analysis": {}
+            "dependency_analysis": {},
         }
 
         if depth in ["standard", "deep"]:
@@ -170,18 +194,21 @@ async def analyze_pipeline_failure(
                     anomaly_analysis = await detect_log_anomalies_func(log_content)
                     enhanced_data["logs_analyzed"][pod_name] = {
                         "log_analysis": log_analysis,
-                        "anomaly_analysis": anomaly_analysis
+                        "anomaly_analysis": anomaly_analysis,
                     }
 
         if depth == "deep":
             # Deep dependency analysis
-            enhanced_data["dependency_analysis"] = await analyze_pipeline_dependencies_func(namespace, pipeline_run)
+            enhanced_data[
+                "dependency_analysis"
+            ] = await analyze_pipeline_dependencies_func(namespace, pipeline_run)
 
         return enhanced_data
 
     except Exception as e:
         logger.error(f"Error analyzing pipeline failure: {str(e)}")
         return {"error": str(e), "logs_analyzed": {}}
+
 
 async def analyze_pod_failure(
     namespace: str,
@@ -192,7 +219,7 @@ async def analyze_pod_failure(
     analyze_logs_func,
     detect_log_anomalies_func,
     get_namespace_events_func,
-    logger
+    logger,
 ) -> Dict[str, Any]:
     """Perform detailed analysis of a failed pod."""
     try:
@@ -204,7 +231,7 @@ async def analyze_pod_failure(
             "pod_status": pod.status.phase,
             "container_statuses": [],
             "logs_analyzed": {},
-            "events_analysis": {}
+            "events_analysis": {},
         }
 
         # Analyze container statuses
@@ -214,7 +241,7 @@ async def analyze_pod_failure(
                     "name": container_status.name,
                     "ready": container_status.ready,
                     "restart_count": container_status.restart_count,
-                    "state": str(container_status.state)
+                    "state": str(container_status.state),
                 }
                 analysis["container_statuses"].append(status_info)
 
@@ -226,7 +253,7 @@ async def analyze_pod_failure(
         anomaly_analysis = await detect_log_anomalies_func(log_content)
         analysis["logs_analyzed"][pod_name] = {
             "log_analysis": log_analysis,
-            "anomaly_analysis": anomaly_analysis
+            "anomaly_analysis": anomaly_analysis,
         }
 
         if depth in ["standard", "deep"]:
@@ -240,12 +267,9 @@ async def analyze_pod_failure(
         logger.error(f"Error analyzing pod failure: {str(e)}")
         return {"error": str(e), "logs_analyzed": {}}
 
+
 async def analyze_generic_failure(
-    namespace: str,
-    identifier: str,
-    depth: str,
-    get_namespace_events_func,
-    logger
+    namespace: str, identifier: str, depth: str, get_namespace_events_func, logger
 ) -> Dict[str, Any]:
     """Perform generic failure analysis."""
     try:
@@ -254,7 +278,7 @@ async def analyze_generic_failure(
             "namespace": namespace,
             "events_analysis": {},
             "logs_analyzed": {},
-            "resource_analysis": {}
+            "resource_analysis": {},
         }
 
         # Get namespace events
@@ -267,16 +291,14 @@ async def analyze_generic_failure(
         logger.error(f"Error in generic failure analysis: {str(e)}")
         return {"error": str(e), "logs_analyzed": {}}
 
+
 # ============================================================================
 # TIMELINE AND RELATED FAILURE ANALYSIS
 # ============================================================================
 
+
 async def build_failure_timeline(
-    namespace: str,
-    identifier: str,
-    time_hours: int,
-    get_namespace_events_func,
-    logger
+    namespace: str, identifier: str, time_hours: int, get_namespace_events_func, logger
 ) -> List[Dict[str, str]]:
     """Build a detailed timeline of events leading to failure."""
     try:
@@ -288,13 +310,15 @@ async def build_failure_timeline(
         # Convert events to timeline format
         if "events" in events_data:
             for event in events_data["events"][:20]:  # Limit to 20 most recent
-                timeline.append({
-                    "timestamp": datetime.now().isoformat(),  # Would extract from event
-                    "event_type": "kubernetes_event",
-                    "component": "cluster",
-                    "description": str(event),
-                    "severity": "medium"
-                })
+                timeline.append(
+                    {
+                        "timestamp": datetime.now().isoformat(),  # Would extract from event
+                        "event_type": "kubernetes_event",
+                        "component": "cluster",
+                        "description": str(event),
+                        "severity": "medium",
+                    }
+                )
 
         # Sort by timestamp
         timeline.sort(key=lambda x: x["timestamp"], reverse=True)
@@ -304,13 +328,14 @@ async def build_failure_timeline(
         logger.error(f"Error building timeline: {str(e)}")
         return []
 
+
 async def find_related_failures(
     namespace: str,
     identifier: str,
     time_hours: int,
     depth: str,
     list_pipelineruns_func,
-    logger
+    logger,
 ) -> List[Dict[str, Any]]:
     """Find related failures in the time window."""
     try:
@@ -322,11 +347,13 @@ async def find_related_failures(
         # Find failed runs in time window
         for pr in pipeline_runs[:10]:  # Limit search
             if pr.get("status") != "Succeeded":
-                related.append({
-                    "incident_id": pr.get("name", "unknown"),
-                    "similarity_score": 0.7,  # Would calculate based on error patterns
-                    "resolution_applied": "Investigation needed"
-                })
+                related.append(
+                    {
+                        "incident_id": pr.get("name", "unknown"),
+                        "similarity_score": 0.7,  # Would calculate based on error patterns
+                        "resolution_applied": "Investigation needed",
+                    }
+                )
 
         return related[:5]  # Return top 5 related incidents
 
@@ -334,9 +361,11 @@ async def find_related_failures(
         logger.error(f"Error finding related failures: {str(e)}")
         return []
 
+
 # ============================================================================
 # ADVANCED ROOT CAUSE ANALYSIS
 # ============================================================================
+
 
 async def perform_advanced_rca(
     primary_analysis: Dict,
@@ -344,7 +373,7 @@ async def perform_advanced_rca(
     related: List,
     depth: str,
     categorize_errors_func,
-    logger
+    logger,
 ) -> Dict[str, Any]:
     """Perform advanced root cause analysis using correlation algorithms."""
     try:
@@ -374,7 +403,10 @@ async def perform_advanced_rca(
                 if isinstance(desc, dict):
                     desc = desc.get("event_string", str(desc))
                 desc_str = str(desc)
-                if any(kw in desc_str.lower() for kw in ["error", "failed", "failure", "warning"]):
+                if any(
+                    kw in desc_str.lower()
+                    for kw in ["error", "failed", "failure", "warning"]
+                ):
                     all_errors.append(desc_str[:200])
                 if len(all_errors) >= 10:
                     break
@@ -393,7 +425,7 @@ async def perform_advanced_rca(
                     "category": top_category[0],
                     "confidence": min(0.9, top_category[1] / 10.0),
                     "description": get_category_description(top_category[0]),
-                    "evidence": all_errors[:3]
+                    "evidence": all_errors[:3],
                 }
 
         # Final fallback: if still empty, derive cause from available context
@@ -402,18 +434,20 @@ async def perform_advanced_rca(
                 "category": "unknown",
                 "confidence": 0.3,
                 "description": "Root cause could not be precisely categorized from available evidence",
-                "evidence": all_errors[:3]
+                "evidence": all_errors[:3],
             }
 
         # Find contributing factors
         contributing_factors = []
         for category, count in categories.items():
             if category != primary_cause.get("category") and count > 0:
-                contributing_factors.append({
-                    "factor": category,
-                    "impact_level": "high" if count > 3 else "medium",
-                    "description": get_category_description(category)
-                })
+                contributing_factors.append(
+                    {
+                        "factor": category,
+                        "impact_level": "high" if count > 3 else "medium",
+                        "description": get_category_description(category),
+                    }
+                )
 
         # Identify affected systems
         affected_systems = ["tekton-pipelines", "kubernetes-cluster"]
@@ -426,9 +460,9 @@ async def perform_advanced_rca(
             "root_cause_analysis": {
                 "primary_cause": primary_cause,
                 "contributing_factors": contributing_factors,
-                "affected_systems": affected_systems
+                "affected_systems": affected_systems,
             },
-            "dependency_failures": []
+            "dependency_failures": [],
         }
 
     except Exception as e:
@@ -437,20 +471,19 @@ async def perform_advanced_rca(
             "root_cause_analysis": {
                 "primary_cause": {"error": str(e)},
                 "contributing_factors": [],
-                "affected_systems": []
+                "affected_systems": [],
             },
-            "dependency_failures": []
+            "dependency_failures": [],
         }
+
 
 # ============================================================================
 # RESOURCE AND CONFIGURATION ANALYSIS
 # ============================================================================
 
+
 async def analyze_resource_constraints(
-    namespace: str,
-    identifier: str,
-    k8s_core_api,
-    logger
+    namespace: str, identifier: str, k8s_core_api, logger
 ) -> Dict[str, Any]:
     """Analyze resource constraints and usage patterns."""
     try:
@@ -459,11 +492,13 @@ async def analyze_resource_constraints(
             quotas = k8s_core_api.list_namespaced_resource_quota(namespace=namespace)
             quota_info = []
             for quota in quotas.items:
-                quota_info.append({
-                    "name": quota.metadata.name,
-                    "used": dict(quota.status.used) if quota.status.used else {},
-                    "hard": dict(quota.status.hard) if quota.status.hard else {}
-                })
+                quota_info.append(
+                    {
+                        "name": quota.metadata.name,
+                        "used": dict(quota.status.used) if quota.status.used else {},
+                        "hard": dict(quota.status.hard) if quota.status.hard else {},
+                    }
+                )
         except ApiException:
             quota_info = []
 
@@ -471,17 +506,16 @@ async def analyze_resource_constraints(
             "resource_quotas": quota_info,
             "memory_pressure": False,  # Would calculate from metrics
             "cpu_pressure": False,
-            "storage_issues": False
+            "storage_issues": False,
         }
 
     except Exception as e:
         logger.error(f"Error analyzing resource constraints: {str(e)}")
         return {}
 
+
 async def analyze_configuration_issues(
-    namespace: str,
-    identifier: str,
-    logger
+    namespace: str, identifier: str, logger
 ) -> List[Dict[str, str]]:
     """Analyze configuration issues."""
     try:
@@ -498,8 +532,7 @@ async def analyze_configuration_issues(
 
 
 async def analyze_pipeline_performance(
-    namespace: str,
-    limit: int = 50
+    namespace: str, limit: int = 50
 ) -> Dict[str, Any]:
     """Analyze pipeline performance for the given namespace.
 
@@ -519,36 +552,33 @@ async def analyze_pipeline_performance(
             "success_rate": None,
             "recent_trend": "unknown",
             "performance_baselines": {},
-            "note": "Performance data analysis placeholder - requires historical pipeline data"
+            "note": "Performance data analysis placeholder - requires historical pipeline data",
         }
 
     except Exception as e:
-        return {
-            "error": str(e),
-            "namespace": namespace
-        }
+        return {"error": str(e), "namespace": namespace}
 
 
 async def analyze_pipeline_dependencies(
-    namespace: str,
-    pipeline_run: str,
-    logger
+    namespace: str, pipeline_run: str, logger
 ) -> Dict[str, Any]:
     """Analyze pipeline dependencies for deep analysis."""
     try:
         return {
             "external_dependencies": [],
             "internal_dependencies": [],
-            "version_conflicts": []
+            "version_conflicts": [],
         }
 
     except Exception as e:
         logger.error(f"Error analyzing dependencies: {str(e)}")
         return {}
 
+
 # ============================================================================
 # REMEDIATION PLANNING
 # ============================================================================
+
 
 async def generate_remediation_plan(
     root_cause_data: Dict,
@@ -556,7 +586,7 @@ async def generate_remediation_plan(
     resource_analysis: Dict,
     config_analysis: List,
     recommend_actions_func,
-    logger
+    logger,
 ) -> Dict[str, List[str]]:
     """Generate specific remediation recommendations."""
     try:
@@ -565,8 +595,12 @@ async def generate_remediation_plan(
 
         # Use existing recommendation logic
         analysis_for_recommendations = {
-            "probable_root_cause": root_cause_data["root_cause_analysis"]["primary_cause"].get("description", "Unknown"),
-            "failed_tasks": primary_analysis.get("basic_analysis", {}).get("failed_tasks", [])
+            "probable_root_cause": root_cause_data["root_cause_analysis"][
+                "primary_cause"
+            ].get("description", "Unknown"),
+            "failed_tasks": primary_analysis.get("basic_analysis", {}).get(
+                "failed_tasks", []
+            ),
         }
 
         existing_recommendations = recommend_actions_func(analysis_for_recommendations)
@@ -575,32 +609,40 @@ async def generate_remediation_plan(
         # Add preventive measures based on root cause
         primary_cause = root_cause_data["root_cause_analysis"]["primary_cause"]
         if primary_cause.get("category") == "resource_limits":
-            preventive_measures.extend([
-                "Implement resource monitoring and alerting",
-                "Review and adjust resource requests/limits",
-                "Set up horizontal pod autoscaling where appropriate"
-            ])
+            preventive_measures.extend(
+                [
+                    "Implement resource monitoring and alerting",
+                    "Review and adjust resource requests/limits",
+                    "Set up horizontal pod autoscaling where appropriate",
+                ]
+            )
         elif primary_cause.get("category") == "network":
-            preventive_measures.extend([
-                "Implement network connectivity monitoring",
-                "Review and test network policies regularly",
-                "Set up dependency health checks"
-            ])
+            preventive_measures.extend(
+                [
+                    "Implement network connectivity monitoring",
+                    "Review and test network policies regularly",
+                    "Set up dependency health checks",
+                ]
+            )
 
         return {
             "immediate_actions": immediate_actions,
-            "preventive_measures": preventive_measures
+            "preventive_measures": preventive_measures,
         }
 
     except Exception as e:
         logger.error(f"Error generating remediation plan: {str(e)}")
         return {"immediate_actions": [], "preventive_measures": []}
 
+
 # ============================================================================
 # CONFIDENCE AND SCORING FUNCTIONS
 # ============================================================================
 
-def calculate_confidence_score(primary_analysis: Dict, root_cause_data: Dict, timeline: List) -> float:
+
+def calculate_confidence_score(
+    primary_analysis: Dict, root_cause_data: Dict, timeline: List
+) -> float:
     """Calculate confidence score for the RCA."""
     try:
         base_score = 0.5
@@ -620,14 +662,19 @@ def calculate_confidence_score(primary_analysis: Dict, root_cause_data: Dict, ti
     except Exception:
         return 0.3  # Low confidence fallback
 
-def calculate_failure_impact_score(primary_analysis: Dict, timeline: List, related: List) -> Dict[str, Any]:
+
+def calculate_failure_impact_score(
+    primary_analysis: Dict, timeline: List, related: List
+) -> Dict[str, Any]:
     """Calculate the impact score of the failure."""
 
     # Base impact from failure type
     impact_score = 5.0  # Medium baseline
 
     # Increase based on number of affected components
-    affected_tasks = len(primary_analysis.get("basic_analysis", {}).get("failed_tasks", []))
+    affected_tasks = len(
+        primary_analysis.get("basic_analysis", {}).get("failed_tasks", [])
+    )
     impact_score += affected_tasks * 0.5
 
     # Increase based on related failures
@@ -656,12 +703,14 @@ def calculate_failure_impact_score(primary_analysis: Dict, timeline: List, relat
         "impact_level": impact_level,
         "affected_components": affected_tasks,
         "related_incidents": related_count,
-        "timeline_density": timeline_count
+        "timeline_density": timeline_count,
     }
+
 
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
+
 
 def extract_log_content_string(pod_logs: Any) -> str:
     """Extract log content as string for analysis."""
@@ -677,6 +726,7 @@ def extract_log_content_string(pod_logs: Any) -> str:
 
     return log_content
 
+
 def get_category_description(category: str) -> str:
     """Get human-readable description for error categories."""
 
@@ -691,10 +741,11 @@ def get_category_description(category: str) -> str:
         "image": "Container image pull or registry issues",
         "volume": "Volume mount or storage access problems",
         "application": "Application-specific errors or bugs",
-        "unknown": "Unspecified or unclassified errors"
+        "unknown": "Unspecified or unclassified errors",
     }
 
     return descriptions.get(category, f"Issues related to {category}")
+
 
 def analyze_error_patterns(errors: List[str]) -> Dict[str, Any]:
     """Analyze patterns in error messages."""
@@ -708,7 +759,7 @@ def analyze_error_patterns(errors: List[str]) -> Dict[str, Any]:
         "FATAL": ["fatal", "panic", "crash", "abort"],
         "ERROR": ["error", "failed", "failure", "exception"],
         "WARNING": ["warning", "warn", "deprecated"],
-        "INFO": ["info", "notice", "debug"]
+        "INFO": ["info", "notice", "debug"],
     }
 
     for error in errors:
@@ -746,21 +797,25 @@ def analyze_error_patterns(errors: List[str]) -> Dict[str, Any]:
         "patterns": patterns,
         "frequency": error_counts,
         "severity": overall_severity,
-        "total_errors": len(errors)
+        "total_errors": len(errors),
     }
+
 
 # ============================================================================
 # FAILURE TREND ANALYSIS
 # ============================================================================
 
-def analyze_failure_trends(related_failures: List[Dict[str, Any]], timeline: List[Dict[str, str]]) -> Dict[str, Any]:
+
+def analyze_failure_trends(
+    related_failures: List[Dict[str, Any]], timeline: List[Dict[str, str]]
+) -> Dict[str, Any]:
     """Analyze trends in failure patterns."""
 
     trends = {
         "failure_frequency": "stable",
         "escalation_pattern": "none",
         "recurring_issues": [],
-        "trend_analysis": {}
+        "trend_analysis": {},
     }
 
     if not related_failures and not timeline:
@@ -788,9 +843,13 @@ def analyze_failure_trends(related_failures: List[Dict[str, Any]], timeline: Lis
             incident_id = failure.get("incident_id", "")
             # Extract pattern (simplified)
             if "build" in incident_id.lower():
-                issue_patterns["build_failures"] = issue_patterns.get("build_failures", 0) + 1
+                issue_patterns["build_failures"] = (
+                    issue_patterns.get("build_failures", 0) + 1
+                )
             elif "test" in incident_id.lower():
-                issue_patterns["test_failures"] = issue_patterns.get("test_failures", 0) + 1
+                issue_patterns["test_failures"] = (
+                    issue_patterns.get("test_failures", 0) + 1
+                )
 
         for pattern, count in issue_patterns.items():
             if count > 1:
@@ -799,10 +858,13 @@ def analyze_failure_trends(related_failures: List[Dict[str, Any]], timeline: Lis
     trends["trend_analysis"] = {
         "total_related_incidents": total_incidents,
         "timeline_events": timeline_events,
-        "analysis_confidence": calculate_trend_confidence(total_incidents, timeline_events)
+        "analysis_confidence": calculate_trend_confidence(
+            total_incidents, timeline_events
+        ),
     }
 
     return trends
+
 
 def calculate_trend_confidence(incidents: int, events: int) -> float:
     """Calculate confidence in trend analysis."""
@@ -819,15 +881,17 @@ def calculate_trend_confidence(incidents: int, events: int) -> float:
     else:
         return 0.3
 
+
 # ============================================================================
 # FAILURE SEVERITY ASSESSMENT
 # ============================================================================
+
 
 def assess_failure_severity(
     primary_analysis: Dict,
     root_cause_data: Dict,
     resource_analysis: Dict,
-    config_analysis: List
+    config_analysis: List,
 ) -> Dict[str, Any]:
     """Assess the overall severity of the failure."""
 
@@ -835,7 +899,9 @@ def assess_failure_severity(
     severity_factors = []
 
     # Analyze primary failure impact
-    failed_tasks = len(primary_analysis.get("basic_analysis", {}).get("failed_tasks", []))
+    failed_tasks = len(
+        primary_analysis.get("basic_analysis", {}).get("failed_tasks", [])
+    )
     if failed_tasks > 3:
         severity_score += 3
         severity_factors.append(f"Multiple task failures ({failed_tasks})")
@@ -844,7 +910,9 @@ def assess_failure_severity(
         severity_factors.append("Multiple component failures")
 
     # Root cause severity
-    primary_cause = root_cause_data.get("root_cause_analysis", {}).get("primary_cause", {})
+    primary_cause = root_cause_data.get("root_cause_analysis", {}).get(
+        "primary_cause", {}
+    )
     cause_category = primary_cause.get("category", "")
 
     if cause_category in ["resource_limits", "network"]:
@@ -855,7 +923,9 @@ def assess_failure_severity(
         severity_factors.append(f"Configuration issue: {cause_category}")
 
     # Resource constraints impact
-    if resource_analysis.get("memory_pressure") or resource_analysis.get("cpu_pressure"):
+    if resource_analysis.get("memory_pressure") or resource_analysis.get(
+        "cpu_pressure"
+    ):
         severity_score += 2
         severity_factors.append("Resource pressure detected")
 
@@ -883,8 +953,9 @@ def assess_failure_severity(
         "severity_score": severity_score,
         "priority": priority,
         "severity_factors": severity_factors,
-        "recommended_response_time": get_response_time_recommendation(severity_level)
+        "recommended_response_time": get_response_time_recommendation(severity_level),
     }
+
 
 def get_response_time_recommendation(severity_level: str) -> str:
     """Get recommended response time based on severity."""
@@ -893,7 +964,7 @@ def get_response_time_recommendation(severity_level: str) -> str:
         "CRITICAL": "Immediate (within 15 minutes)",
         "HIGH": "Urgent (within 1 hour)",
         "MEDIUM": "Standard (within 4 hours)",
-        "LOW": "Normal (within 24 hours)"
+        "LOW": "Normal (within 24 hours)",
     }
 
     return response_times.get(severity_level, "Normal (within 24 hours)")
@@ -964,7 +1035,7 @@ def generate_cost_impact_description(impact: float, scenario_type: str) -> str:
 def analyze_system_impact(
     simulation_results: Dict[str, Any],
     baseline_data: Dict[str, Any],
-    scenario_type: str
+    scenario_type: str,
 ) -> Dict[str, Any]:
     """Analyze the simulated impact on different system aspects."""
     try:
@@ -978,8 +1049,10 @@ def analyze_system_impact(
                 "worst_case": f"{perf_stats.get('max', 0):.1%}",
                 "best_case": f"{perf_stats.get('min', 0):.1%}",
                 "confidence_interval": f"{perf_stats.get('p5', 0):.1%} to {perf_stats.get('p95', 0):.1%}",
-                "severity": categorize_impact_severity(perf_stats.get('mean', 0)),
-                "description": generate_performance_impact_description(perf_stats.get('mean', 0), scenario_type)
+                "severity": categorize_impact_severity(perf_stats.get("mean", 0)),
+                "description": generate_performance_impact_description(
+                    perf_stats.get("mean", 0), scenario_type
+                ),
             }
 
         # Analyze reliability impact
@@ -990,8 +1063,10 @@ def analyze_system_impact(
                 "worst_case": f"{rel_stats.get('max', 0):.1%}",
                 "best_case": f"{rel_stats.get('min', 0):.1%}",
                 "confidence_interval": f"{rel_stats.get('p5', 0):.1%} to {rel_stats.get('p95', 0):.1%}",
-                "severity": categorize_impact_severity(rel_stats.get('mean', 0)),
-                "description": generate_reliability_impact_description(rel_stats.get('mean', 0), scenario_type)
+                "severity": categorize_impact_severity(rel_stats.get("mean", 0)),
+                "description": generate_reliability_impact_description(
+                    rel_stats.get("mean", 0), scenario_type
+                ),
             }
 
         # Analyze cost impact
@@ -1002,8 +1077,10 @@ def analyze_system_impact(
                 "worst_case": f"{cost_stats.get('max', 0):.1%}",
                 "best_case": f"{cost_stats.get('min', 0):.1%}",
                 "confidence_interval": f"{cost_stats.get('p5', 0):.1%} to {cost_stats.get('p95', 0):.1%}",
-                "severity": categorize_impact_severity(abs(cost_stats.get('mean', 0))),
-                "description": generate_cost_impact_description(cost_stats.get('mean', 0), scenario_type)
+                "severity": categorize_impact_severity(abs(cost_stats.get("mean", 0))),
+                "description": generate_cost_impact_description(
+                    cost_stats.get("mean", 0), scenario_type
+                ),
             }
 
         return impact_analysis
@@ -1016,7 +1093,7 @@ def perform_risk_assessment(
     simulation_results: Dict[str, Any],
     impact_analysis: Dict[str, Any],
     affected_components: List[Dict[str, Any]],
-    risk_tolerance: str
+    risk_tolerance: str,
 ) -> Dict[str, Any]:
     """Perform comprehensive risk assessment of the proposed changes."""
     try:
@@ -1031,7 +1108,9 @@ def perform_risk_assessment(
             perf_score = min(100, abs(perf_mean) * 100)
             risk_scores.append(perf_score)
             if abs(perf_mean) > 0.15:
-                risk_factors.append(f"Significant performance impact: {perf_impact.get('expected_change', 'unknown')}")
+                risk_factors.append(
+                    f"Significant performance impact: {perf_impact.get('expected_change', 'unknown')}"
+                )
 
         # Assess reliability risk — always contribute a proportional score
         rel_impact = impact_analysis.get("reliability_impact", {})
@@ -1041,7 +1120,9 @@ def perform_risk_assessment(
             rel_score = min(100, abs(rel_mean) * 150)
             risk_scores.append(rel_score)
             if abs(rel_mean) >= 0.1:
-                risk_factors.append(f"Reliability impact: {rel_impact.get('expected_change', 'unknown')}")
+                risk_factors.append(
+                    f"Reliability impact: {rel_impact.get('expected_change', 'unknown')}"
+                )
 
         # Assess component risk
         critical_components = 0
@@ -1049,7 +1130,9 @@ def perform_risk_assessment(
             severity = component.get("severity", "LOW")
             if severity in ["CRITICAL", "HIGH", "critical", "high"]:
                 critical_components += 1
-                risk_factors.append(f"Critical component affected: {component.get('component', 'unknown')}")
+                risk_factors.append(
+                    f"Critical component affected: {component.get('component', 'unknown')}"
+                )
                 risk_scores.append(75 if severity.lower() == "high" else 100)
 
         # Calculate overall risk score
@@ -1064,10 +1147,12 @@ def perform_risk_assessment(
         risk_thresholds = {
             "conservative": {"high": 30, "medium": 15},
             "moderate": {"high": 50, "medium": 25},
-            "aggressive": {"high": 70, "medium": 40}
+            "aggressive": {"high": 70, "medium": 40},
         }
 
-        thresholds = risk_thresholds.get(risk_tolerance.lower(), risk_thresholds["moderate"])
+        thresholds = risk_thresholds.get(
+            risk_tolerance.lower(), risk_thresholds["moderate"]
+        )
 
         if overall_risk_score >= thresholds["high"]:
             overall_risk = "HIGH"
@@ -1083,7 +1168,13 @@ def perform_risk_assessment(
         if perf_impact and abs(perf_mean) > 0.3:
             rollback_factors.append("Significant performance changes")
 
-        rollback_complexity = "HIGH" if len(rollback_factors) > 1 else "MEDIUM" if rollback_factors else "LOW"
+        rollback_complexity = (
+            "HIGH"
+            if len(rollback_factors) > 1
+            else "MEDIUM"
+            if rollback_factors
+            else "LOW"
+        )
 
         # Generate testing recommendations
         testing_recommendations = []
@@ -1091,7 +1182,9 @@ def perform_risk_assessment(
             testing_recommendations.append("Conduct staged rollout with monitoring")
             testing_recommendations.append("Implement comprehensive health checks")
         if critical_components > 0:
-            testing_recommendations.append("Perform component-specific integration tests")
+            testing_recommendations.append(
+                "Perform component-specific integration tests"
+            )
         if not testing_recommendations:
             testing_recommendations.append("Standard testing procedures sufficient")
 
@@ -1105,8 +1198,8 @@ def perform_risk_assessment(
             "risk_breakdown": {
                 "performance_risk": perf_mean,
                 "reliability_risk": rel_mean,
-                "component_risk": critical_components
-            }
+                "component_risk": critical_components,
+            },
         }
 
     except Exception as e:
@@ -1115,7 +1208,9 @@ def perform_risk_assessment(
             "overall_risk": "unknown",
             "risk_factors": [f"Risk assessment error: {str(e)}"],
             "rollback_complexity": "unknown",
-            "testing_recommendations": ["Perform manual risk assessment due to simulation error"]
+            "testing_recommendations": [
+                "Perform manual risk assessment due to simulation error"
+            ],
         }
 
 
@@ -1123,7 +1218,7 @@ def calculate_simulation_quality(
     baseline_data: Dict[str, Any],
     historical_data: Dict[str, Any],
     models: Dict[str, Any],
-    logger=None
+    logger=None,
 ) -> Dict[str, Any]:
     """Calculate quality metrics for the simulation."""
     try:
@@ -1132,8 +1227,14 @@ def calculate_simulation_quality(
         is_real_data = data_source == "prometheus"
 
         # Count all available data points across all metrics
-        metric_keys = ["cpu_utilization", "memory_utilization", "response_times",
-                       "error_rates", "throughput", "pipeline_durations"]
+        metric_keys = [
+            "cpu_utilization",
+            "memory_utilization",
+            "response_times",
+            "error_rates",
+            "throughput",
+            "pipeline_durations",
+        ]
         data_points_by_metric = {}
         total_data_points = 0
 
@@ -1144,7 +1245,9 @@ def calculate_simulation_quality(
                 total_data_points += count
 
         # Use the max data points from any single metric for accuracy calculation
-        max_metric_points = max(data_points_by_metric.values()) if data_points_by_metric else 0
+        max_metric_points = (
+            max(data_points_by_metric.values()) if data_points_by_metric else 0
+        )
 
         # Model accuracy - higher for real Prometheus data
         if is_real_data:
@@ -1176,18 +1279,21 @@ def calculate_simulation_quality(
         metrics_with_data = len(data_points_by_metric)
         metric_coverage = metrics_with_data / len(metric_keys) if metric_keys else 0
 
-        data_completeness = min(1.0, (
-            namespaces_analyzed * 0.05 +
-            nodes_analyzed * 0.03 +
-            metric_coverage * 0.5 +
-            (0.3 if is_real_data else 0)
-        ))
+        data_completeness = min(
+            1.0,
+            (
+                namespaces_analyzed * 0.05
+                + nodes_analyzed * 0.03
+                + metric_coverage * 0.5
+                + (0.3 if is_real_data else 0)
+            ),
+        )
 
         # Identify assumptions and limitations
         assumptions = [
             "Linear scaling relationships assumed for resource consumption",
             "Historical patterns representative of future behavior",
-            "No external dependencies or constraints considered"
+            "No external dependencies or constraints considered",
         ]
 
         if is_real_data:
@@ -1197,22 +1303,38 @@ def calculate_simulation_quality(
 
         # Add data source information
         if is_real_data:
-            limitations.append(f"Analysis based on {total_data_points} real Prometheus data points")
-            limitations.append(f"Metrics collected: {', '.join(data_points_by_metric.keys())}")
+            limitations.append(
+                f"Analysis based on {total_data_points} real Prometheus data points"
+            )
+            limitations.append(
+                f"Metrics collected: {', '.join(data_points_by_metric.keys())}"
+            )
         else:
-            limitations.append(f"Simulation based on {max_metric_points} synthetic data points")
+            limitations.append(
+                f"Simulation based on {max_metric_points} synthetic data points"
+            )
             if data_source == "synthetic_fallback":
-                limitations.append("Prometheus queries returned no data - using synthetic fallback")
+                limitations.append(
+                    "Prometheus queries returned no data - using synthetic fallback"
+                )
             elif data_source == "synthetic_error_fallback":
-                limitations.append(f"Prometheus query error - using synthetic fallback: {historical_data.get('error', 'unknown')}")
+                limitations.append(
+                    f"Prometheus query error - using synthetic fallback: {historical_data.get('error', 'unknown')}"
+                )
 
-        limitations.append(f"Analysis covers {namespaces_analyzed} namespaces and {nodes_analyzed} nodes")
+        limitations.append(
+            f"Analysis covers {namespaces_analyzed} namespaces and {nodes_analyzed} nodes"
+        )
 
         if not is_real_data:
-            limitations.append("Monte Carlo simulation uses simplified models with synthetic data")
+            limitations.append(
+                "Monte Carlo simulation uses simplified models with synthetic data"
+            )
 
         if model_accuracy < 0.7:
-            limitations.append("Limited data availability may reduce prediction accuracy")
+            limitations.append(
+                "Limited data availability may reduce prediction accuracy"
+            )
 
         if data_completeness < 0.5:
             limitations.append("Incomplete baseline data may affect simulation quality")
@@ -1227,7 +1349,7 @@ def calculate_simulation_quality(
             "nodes_analyzed": nodes_analyzed,
             "assumptions": assumptions,
             "limitations": limitations,
-            "overall_quality": round((model_accuracy + data_completeness) / 2, 2)
+            "overall_quality": round((model_accuracy + data_completeness) / 2, 2),
         }
 
     except Exception as e:
@@ -1240,7 +1362,7 @@ def calculate_simulation_quality(
             "total_data_points": 0,
             "assumptions": ["Simulation quality calculation failed"],
             "limitations": [f"Quality assessment error: {str(e)}"],
-            "overall_quality": 0.0
+            "overall_quality": 0.0,
         }
 
 
@@ -1249,7 +1371,7 @@ def generate_simulation_recommendations(
     risk_assessment: Dict[str, Any],
     simulation_quality: Dict[str, Any],
     scenario_type: str,
-    logger=None
+    logger=None,
 ) -> Dict[str, Any]:
     """Generate actionable recommendations based on simulation results."""
     try:
@@ -1273,46 +1395,60 @@ def generate_simulation_recommendations(
         alternative_approaches = []
 
         if scenario_type == "scaling":
-            alternative_approaches.extend([
-                "Implement gradual scaling instead of immediate changes",
-                "Use horizontal pod autoscaling with conservative thresholds",
-                "Consider blue-green deployment for scaling changes"
-            ])
+            alternative_approaches.extend(
+                [
+                    "Implement gradual scaling instead of immediate changes",
+                    "Use horizontal pod autoscaling with conservative thresholds",
+                    "Consider blue-green deployment for scaling changes",
+                ]
+            )
         elif scenario_type == "resource_limits":
-            alternative_approaches.extend([
-                "Implement changes during low-traffic periods",
-                "Use resource quota increases instead of direct limit changes",
-                "Deploy changes to staging environment first"
-            ])
+            alternative_approaches.extend(
+                [
+                    "Implement changes during low-traffic periods",
+                    "Use resource quota increases instead of direct limit changes",
+                    "Deploy changes to staging environment first",
+                ]
+            )
         elif scenario_type == "configuration":
-            alternative_approaches.extend([
-                "Use canary deployments for configuration changes",
-                "Implement feature flags to control configuration rollout",
-                "Validate configurations in non-production environments"
-            ])
+            alternative_approaches.extend(
+                [
+                    "Use canary deployments for configuration changes",
+                    "Implement feature flags to control configuration rollout",
+                    "Validate configurations in non-production environments",
+                ]
+            )
         elif scenario_type == "deployment":
-            alternative_approaches.extend([
-                "Use rolling deployments with smaller batch sizes",
-                "Implement blue-green deployment strategy",
-                "Schedule deployment during maintenance windows"
-            ])
+            alternative_approaches.extend(
+                [
+                    "Use rolling deployments with smaller batch sizes",
+                    "Implement blue-green deployment strategy",
+                    "Schedule deployment during maintenance windows",
+                ]
+            )
 
         # Generate monitoring requirements
         monitoring_requirements = [
             "Monitor key performance metrics during and after changes",
             "Set up alerts for resource utilization thresholds",
-            "Track error rates and response times continuously"
+            "Track error rates and response times continuously",
         ]
 
         # Add specific monitoring based on risk factors
         risk_factors = risk_assessment.get("risk_factors", [])
         for factor in risk_factors:
             if "performance" in factor.lower():
-                monitoring_requirements.append("Implement detailed application performance monitoring")
+                monitoring_requirements.append(
+                    "Implement detailed application performance monitoring"
+                )
             elif "reliability" in factor.lower():
-                monitoring_requirements.append("Set up comprehensive health checks and SLA monitoring")
+                monitoring_requirements.append(
+                    "Set up comprehensive health checks and SLA monitoring"
+                )
             elif "component" in factor.lower():
-                monitoring_requirements.append("Monitor individual component health and dependencies")
+                monitoring_requirements.append(
+                    "Monitor individual component health and dependencies"
+                )
 
         return {
             "proceed": proceed,
@@ -1320,7 +1456,7 @@ def generate_simulation_recommendations(
             "alternative_approaches": alternative_approaches,
             "monitoring_requirements": monitoring_requirements,
             "quality_score": overall_quality,
-            "risk_level": overall_risk
+            "risk_level": overall_risk,
         }
 
     except Exception as e:
@@ -1331,5 +1467,5 @@ def generate_simulation_recommendations(
             "conditions": ["Manual review required due to simulation error"],
             "alternative_approaches": ["Conduct manual impact analysis"],
             "monitoring_requirements": ["Implement comprehensive monitoring"],
-            "error": str(e)
+            "error": str(e),
         }

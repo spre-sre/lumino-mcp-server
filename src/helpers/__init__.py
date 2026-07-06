@@ -247,7 +247,7 @@ from .kubearchive_integration import (
     check_kubearchive_availability,
     query_kubearchive_resources,
     format_timestamp_for_kubearchive,
-    setup_kubearchive_client
+    setup_kubearchive_client,
 )
 
 __all__ = [
@@ -291,6 +291,7 @@ __all__ = [
     "LOG_ANALYSIS_CONFIG",
     "PIPELINE_ANALYSIS_CONFIG",
     "SEMANTIC_SEARCH_CONFIG",
+    "KUBEARCHIVE_CONFIG",
     # Semantic Search
     "interpret_semantic_query",
     "determine_search_strategy",
@@ -330,6 +331,8 @@ __all__ = [
     "calculate_entropy",
     "extract_log_features",
     "train_anomaly_model",
+    "train_enhanced_anomaly_model",
+    "train_or_load_model",
     "analyze_log_patterns_for_failure_prediction",
     "generate_failure_predictions",
     "truncate_to_token_limit",
@@ -436,11 +439,11 @@ __all__ = [
     "ModelVersionManager",
     "build_labels_from_correlations",
     "parse_ml_time_period",
-
+    # KubeArchive
     "KubeArchiveEndpointDiscovery",
     "KubeArchiveClient",
     "check_kubearchive_availability",
     "query_kubearchive_resources",
     "format_timestamp_for_kubearchive",
-    "setup_kubearchive_client"
+    "setup_kubearchive_client",
 ]

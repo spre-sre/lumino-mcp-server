@@ -5,6 +5,24 @@ All notable changes to Lumino MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-07-06
+
+### Fixed
+- Consolidate duplicate Kubernetes client initialization into a single `try/except` block to prevent partial initialization states
+- Isolate KubeArchive endpoint discovery in a nested `try/except` so a kubearchive-specific failure no longer disables all Kubernetes API clients
+- Add `k8s_networking_api` and `kubearchive_endpoint_discovery` to the fallback `None` assignments so all API handles are safely unset when cluster access is unavailable
+- Replace bare `except:` clauses with `except Exception:` in `event_analysis.py` and `kubearchive_integration.py` to avoid catching `KeyboardInterrupt` and `SystemExit`
+- Add missing `import re` to `kubearchive_integration.py` to fix latent `NameError` where `re.match()` was called without the `re` module imported
+- Fix `logger.warning(...)` in `log_analysis.py` `train_or_load_model` to use `logging.warning(...)` since `logger` was never defined at module level, which would cause a `NameError` at runtime
+
+### Added
+- New test suite `tests/test_k8s_client_initialization.py` covering K8s client initialization and failure-path handling
+- `_safe_compile_namespace_filter` helper in `server-mcp.py` with length limit and nested-quantifier detection to prevent ReDoS via namespace filter regex
+- Export `KUBEARCHIVE_CONFIG`, `train_enhanced_anomaly_model`, and `train_or_load_model` in `helpers/__init__.py` `__all__`
+
+### Changed
+- Remove unused imports: `asyncio` from `main.py` and `log_analysis.py`, `PIPELINE_ANALYSIS_CONFIG` from `failure_analysis.py`, `LOG_ANALYSIS_CONFIG` from `log_analysis.py`, `Tuple` from `kubearchive_integration.py`, `timedelta` from `resource_topology.py`
+
 ## [0.9.2] - 2026-01-24
 
 ### Added
