@@ -264,10 +264,6 @@ else:
     k8s_networking_api = None
     kubearchive_endpoint_discovery = None
 
-# KubeArchive host discovery cache (Issue #8)
-_kubearchive_host_cache: Dict[str, Any] = {"host": None, "ts": 0}
-KUBEARCHIVE_CACHE_TTL_SEC = 300
-
 
 # Create a decorator to add tool execution logging
 def log_tool_execution(func):
@@ -413,9 +409,14 @@ _MAX_REGEX_PATTERN_LEN = 200
 
 # Detects nested quantifiers that cause catastrophic backtracking (ReDoS).
 # Catches patterns like (a+)+, (a*)+, (a+)*, ([^x]+)+, (?:a+)+, etc.
+# Also catches overlapping-alternation quantifiers like (a|aa)+, (x|xx|xxx)+.
+# Excludes bounded quantifiers like (\d{3})+ which cannot cause catastrophic
+# backtracking because {n} and {n,m} with small m are fixed-width.
 _NESTED_QUANTIFIER_RE = re.compile(
-    r"\([^)]*[+*}]\s*\)\s*[+*{?]"  # (x+)+ or (x*){2,} etc.
-    r"|\)\s*[+*{?]\s*\)\s*[+*{?]"  # nested groups: )+ )+
+    r"\([^)]*[+*]\s*\)\s*[+*{]"  # (x+)+ or (x*){2,} -- inner unbounded
+    r"|\([^)]*\{\d+,\}\s*\)\s*[+*{]"  # (x{2,})+ -- inner open-ended {n,}
+    r"|\)\s*[+*{]\s*\)\s*[+*{]"  # nested groups: )+ )+
+    r"|\([^)]*\|[^)]*\)\s*[+*{]"  # overlapping alternation: (a|aa)+
 )
 
 
@@ -5595,8 +5596,20 @@ async def _process_prometheus_results(
                 for result in raw_results:
                     metric = result.get("metric", {})
                     namespace = metric.get("namespace", "")
-                    if namespace and namespace_pattern.search(namespace):
-                        filtered_results.append(result)
+                    if namespace:
+                        try:
+                            matched = await asyncio.wait_for(
+                                asyncio.to_thread(namespace_pattern.search, namespace),
+                                timeout=2.0,
+                            )
+                        except asyncio.TimeoutError:
+                            logger.warning(
+                                f"Regex match timed out for namespace '{namespace}' "
+                                f"with filter '{namespace_filter}'"
+                            )
+                            matched = None
+                        if matched:
+                            filtered_results.append(result)
 
                 raw_results = filtered_results
                 logger.info(
@@ -12759,9 +12772,22 @@ async def live_system_topology_mapper(
                     if namespace_filter:
                         try:
                             pattern = _safe_compile_namespace_filter(namespace_filter)
-                            all_namespaces = [
-                                ns for ns in all_namespaces if pattern.search(ns)
-                            ]
+                            filtered_ns = []
+                            for ns in all_namespaces:
+                                try:
+                                    matched = await asyncio.wait_for(
+                                        asyncio.to_thread(pattern.search, ns),
+                                        timeout=2.0,
+                                    )
+                                except asyncio.TimeoutError:
+                                    logger.warning(
+                                        f"Regex match timed out for namespace '{ns}' "
+                                        f"with filter '{namespace_filter}'"
+                                    )
+                                    matched = None
+                                if matched:
+                                    filtered_ns.append(ns)
+                            all_namespaces = filtered_ns
                         except (re.error, ValueError) as e:
                             logger.warning(
                                 f"Invalid namespace filter regex '{namespace_filter}': {e}"

@@ -688,8 +688,9 @@ class TestNamespaceFilterReDoSSafety:
 
         for site in sites:
             lineno = site["lineno"]
-            # Scan forward up to 20 lines for the corresponding except
-            region = "\n".join(lines[lineno - 1 : min(lineno + 20, len(lines))])
+            # Scan forward up to 35 lines for the corresponding except
+            # (defense-in-depth asyncio.wait_for wrappers add lines)
+            region = "\n".join(lines[lineno - 1 : min(lineno + 35, len(lines))])
             has_value_error_catch = bool(
                 re.search(r"except\s*\(.*ValueError.*\)", region)
             ) or bool(re.search(r"except\s+ValueError", region))
@@ -748,6 +749,10 @@ class TestNamespaceFilterReDoSSafety:
             r"(x*)+y",
             r"([^/]+)+",
             r"(?:a+)+",
+            # Overlapping-alternation quantifiers (finding 1/7)
+            r"(a|aa)+$",
+            r"(b|bb)+",
+            r"(x|xx|xxx)+",
         ]
         for pattern in redos_patterns:
             with pytest.raises(ValueError, match="nested quantifier"):
@@ -760,17 +765,37 @@ class TestNamespaceFilterReDoSSafety:
         assert match, "_MAX_REGEX_PATTERN_LEN not found"
         max_len = int(match.group(1))
 
-        # A pattern just over the limit must be rejected
-        overlong = "a" * (max_len + 1)
-        assert len(overlong) > max_len
-
-        # The length check in the helper should raise ValueError
-        # We verify by checking the constant exists and is reasonable
+        # Sanity-check the constant
         assert max_len > 0, "_MAX_REGEX_PATTERN_LEN must be positive"
         assert max_len <= 1000, (
             f"_MAX_REGEX_PATTERN_LEN={max_len} is too permissive. "
             f"A limit above 1000 chars provides insufficient ReDoS protection."
         )
+
+        # Reconstruct the guard logic from source to test without importing
+        nq_lines = []
+        in_nq = False
+        for line in server_source.splitlines():
+            if "_NESTED_QUANTIFIER_RE" in line and "re.compile" in line:
+                in_nq = True
+            if in_nq:
+                nq_lines.append(line)
+                if line.rstrip().endswith(")"):
+                    break
+        fragments = re.findall(r'r"([^"]*)"', "\n".join(nq_lines))
+        nested_re = re.compile("".join(fragments))
+
+        def safe_compile(pattern: str) -> re.Pattern:
+            if len(pattern) > max_len:
+                raise ValueError("too long")
+            if nested_re.search(pattern):
+                raise ValueError("nested quantifier")
+            return re.compile(pattern)
+
+        # A pattern just over the limit must be rejected
+        overlong = "a" * (max_len + 1)
+        with pytest.raises(ValueError, match="too long"):
+            safe_compile(overlong)
 
     def test_accepts_safe_namespace_patterns(self, server_source: str):
         """_safe_compile_namespace_filter must accept normal namespace
@@ -797,7 +822,8 @@ class TestNamespaceFilterReDoSSafety:
             r"test-\d{4}",
             r"^prod-",
             r"my-namespace",
-            r"(staging|prod)",  # alternation, not nested quantifier
+            r"(staging|prod)",  # alternation without quantifier -- safe
+            r"(\d{3})+",  # bounded quantifier {n} -- safe (finding 4)
         ]
         for pattern in safe_patterns:
             assert len(pattern) <= max_len, f"Test pattern too long: {pattern}"
