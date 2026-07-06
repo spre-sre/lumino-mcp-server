@@ -8,6 +8,7 @@
 # predictive_log_analyzer tool.
 # ============================================================================
 
+import io
 import json
 import hashlib
 import hmac as hmac_mod
@@ -143,30 +144,84 @@ class ModelPersistenceManager:
     def _get_signing_key(self) -> bytes:
         """Get or create the model signing key for HMAC verification.
 
-        The key is stored in the model storage directory and is unique per
-        installation.  It protects against loading tampered model files.
+        The key is stored in the parent of the models directory
+        (~/.lumino/.model_signing_key) so that an attacker with write access
+        to the models/ directory alone cannot read the key and forge valid
+        HMACs.
 
         Returns:
             The 256-bit signing key
+
+        Raises:
+            ValueError: If the key file exists but is not exactly 32 bytes
+                (corrupted or truncated key)
         """
-        key_file = self.storage_dir / self._SIGNING_KEY_FILE
+        import tempfile
+
+        key_dir = Path.home() / ".lumino"
+        key_dir.mkdir(parents=True, exist_ok=True)
+        key_file = key_dir / self._SIGNING_KEY_FILE
 
         # Try to atomically create the key file (O_CREAT|O_EXCL prevents a
         # TOCTOU race where two concurrent processes both generate different
         # keys and the last writer silently wins).
         key = os.urandom(32)
         try:
-            fd = os.open(str(key_file), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            # Another process (or a previous run) already created the file.
-            return key_file.read_bytes()
+            # Write to a temp file in the same directory first, then
+            # atomically rename to the final path.  This prevents a
+            # half-written key file from being read if os.write() is
+            # interrupted.
+            fd, tmp_path = tempfile.mkstemp(dir=str(key_dir), prefix=".key_tmp_")
+            try:
+                os.write(fd, key)
+            finally:
+                os.close(fd)
+            os.chmod(tmp_path, 0o600)
 
-        try:
-            os.write(fd, key)
-        finally:
-            os.close(fd)
+            # Atomic rename -- if the target already exists on POSIX, the
+            # rename is still atomic but another process won.  Use the
+            # link+unlink trick to emulate O_EXCL semantics for the final
+            # path.
+            try:
+                os.link(tmp_path, str(key_file))
+                os.unlink(tmp_path)
+            except (FileExistsError, OSError):
+                # Another process (or a previous run) already created the
+                # key file.  Discard ours and read theirs.
+                os.unlink(tmp_path)
+                existing_key = key_file.read_bytes()
+                if len(existing_key) != 32:
+                    raise ValueError(
+                        f"Model signing key at {key_file} is corrupted "
+                        f"({len(existing_key)} bytes, expected 32). "
+                        "Delete the file and retry to generate a new key."
+                    )
+                return existing_key
+
+        except Exception:
+            # If we get here unexpectedly, ensure we still try to read an
+            # existing key file before giving up.
+            if key_file.exists():
+                existing_key = key_file.read_bytes()
+                if len(existing_key) != 32:
+                    raise ValueError(
+                        f"Model signing key at {key_file} is corrupted "
+                        f"({len(existing_key)} bytes, expected 32). "
+                        "Delete the file and retry to generate a new key."
+                    )
+                return existing_key
+            raise
+
+        # Validate the key we just wrote
+        written_key = key_file.read_bytes()
+        if len(written_key) != 32:
+            raise ValueError(
+                f"Model signing key at {key_file} is corrupted "
+                f"({len(written_key)} bytes, expected 32). "
+                "Delete the file and retry to generate a new key."
+            )
         logger.info("Generated new model signing key")
-        return key
+        return written_key
 
     def _compute_file_hmac(self, file_path: Path) -> str:
         """Compute HMAC-SHA256 of a file for integrity verification.
@@ -177,11 +232,21 @@ class ModelPersistenceManager:
         Returns:
             Hex-encoded HMAC-SHA256 string
         """
-        key = self._get_signing_key()
-        h = hmac_mod.new(key, digestmod=hashlib.sha256)
         with open(file_path, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                h.update(chunk)
+            data = f.read()
+        return self._compute_bytes_hmac(data)
+
+    def _compute_bytes_hmac(self, data: bytes) -> str:
+        """Compute HMAC-SHA256 of a byte buffer for integrity verification.
+
+        Args:
+            data: The bytes to compute the HMAC over
+
+        Returns:
+            Hex-encoded HMAC-SHA256 string
+        """
+        key = self._get_signing_key()
+        h = hmac_mod.new(key, data, digestmod=hashlib.sha256)
         return h.hexdigest()
 
     def _verify_file_hmac(self, file_path: Path, expected_hmac: str) -> bool:
@@ -197,6 +262,21 @@ class ModelPersistenceManager:
             True if the HMAC matches
         """
         actual_hmac = self._compute_file_hmac(file_path)
+        return hmac_mod.compare_digest(actual_hmac, expected_hmac)
+
+    def _verify_bytes_hmac(self, data: bytes, expected_hmac: str) -> bool:
+        """Verify HMAC-SHA256 of a byte buffer against an expected value.
+
+        Uses constant-time comparison to prevent timing attacks.
+
+        Args:
+            data: The bytes to verify
+            expected_hmac: The expected HMAC hex string
+
+        Returns:
+            True if the HMAC matches
+        """
+        actual_hmac = self._compute_bytes_hmac(data)
         return hmac_mod.compare_digest(actual_hmac, expected_hmac)
 
     # ---- End security helpers ----------------------------------------------
@@ -221,6 +301,12 @@ class ModelPersistenceManager:
     def save_model(self, model: Any, model_id: str, metadata: Dict[str, Any]) -> str:
         """Save a model to disk with metadata.
 
+        The save is performed atomically: the model is first written to a
+        temporary file, the HMAC is computed, the metadata (including HMAC)
+        is written, and only then the temp file is atomically renamed to
+        the final path.  This ensures no model file ever exists on disk
+        without a corresponding valid HMAC in the metadata sidecar.
+
         Args:
             model: The trained model object (e.g., IsolationForest)
             model_id: Unique identifier for the model
@@ -229,27 +315,51 @@ class ModelPersistenceManager:
         Returns:
             The model file path
         """
+        import tempfile
+
         self._validate_model_id(model_id)
 
         model_file = self.storage_dir / f"{model_id}.joblib"
         meta_file = self.storage_dir / f"{model_id}.meta.json"
 
-        # Save model using joblib
-        joblib.dump(model, model_file)
+        # Step 1: Write model to a temporary file in the same directory.
+        # Using the same directory ensures os.rename() is atomic (same
+        # filesystem).
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(self.storage_dir), prefix=f".{model_id}_tmp_", suffix=".joblib"
+        )
+        os.close(fd)
+        tmp_model_path = Path(tmp_path)
 
-        # Compute integrity HMAC for the saved model file
-        model_hmac = self._compute_file_hmac(model_file)
+        try:
+            # Save model to temp file using joblib
+            joblib.dump(model, tmp_model_path)
 
-        # Add timestamps and integrity signature to metadata
-        metadata["model_id"] = model_id
-        metadata["created_at"] = metadata.get("created_at", datetime.now().isoformat())
-        metadata["last_used_at"] = datetime.now().isoformat()
-        metadata["file_path"] = str(model_file)
-        metadata["model_hmac"] = model_hmac
+            # Step 2: Compute integrity HMAC over the temp file
+            model_hmac = self._compute_file_hmac(tmp_model_path)
 
-        # Save metadata
-        with open(meta_file, "w") as f:
-            json.dump(metadata, f, indent=2)
+            # Step 3: Add timestamps and integrity signature to metadata
+            metadata["model_id"] = model_id
+            metadata["created_at"] = metadata.get(
+                "created_at", datetime.now().isoformat()
+            )
+            metadata["last_used_at"] = datetime.now().isoformat()
+            metadata["file_path"] = str(model_file)
+            metadata["model_hmac"] = model_hmac
+
+            # Write metadata (with HMAC) BEFORE renaming the model file.
+            with open(meta_file, "w") as f:
+                json.dump(metadata, f, indent=2)
+
+            # Step 4: Atomically rename temp model file to final path.
+            # After this point, the model file and its HMAC are consistent.
+            os.replace(str(tmp_model_path), str(model_file))
+
+        except Exception:
+            # Clean up temp file on any failure
+            if tmp_model_path.exists():
+                tmp_model_path.unlink()
+            raise
 
         # Update index
         index = self._load_index()
@@ -306,6 +416,13 @@ class ModelPersistenceManager:
         if not model_file.exists():
             raise FileNotFoundError(f"Model {model_id} not found at {model_file}")
 
+        # Read the model file bytes into memory ONCE.  Both HMAC
+        # verification and joblib deserialization operate on this same
+        # buffer, eliminating the TOCTOU window between disk-based
+        # _verify_file_hmac() and joblib.load() where an attacker could
+        # swap the file between the two calls.
+        model_bytes = model_file.read_bytes()
+
         # Load metadata first -- JSON deserialization is safe and gives us
         # the HMAC we need to verify before touching joblib/pickle.
         metadata = {}
@@ -313,12 +430,21 @@ class ModelPersistenceManager:
             with open(meta_file, "r") as f:
                 metadata = json.load(f)
 
+        # Determine strict vs. permissive mode for unsigned models.
+        # Strict mode (default) refuses to load models without an HMAC
+        # signature.  Legacy/permissive mode requires explicit opt-in via
+        # LUMINO_STRICT_MODEL_LOADING=false so existing deployments with
+        # unsigned models can migrate gracefully.
+        strict_mode = os.environ.get(
+            "LUMINO_STRICT_MODEL_LOADING", "true"
+        ).lower() not in ("false", "0", "no")
+
         # Verify model file integrity before deserialization.
         # joblib.load() uses pickle internally which can execute arbitrary
         # code, so the file MUST be verified before it is deserialized.
         stored_hmac = metadata.get("model_hmac")
         if stored_hmac:
-            if not self._verify_file_hmac(model_file, stored_hmac):
+            if not self._verify_bytes_hmac(model_bytes, stored_hmac):
                 raise ValueError(
                     f"Model {model_id} failed integrity verification. "
                     "The model file may have been tampered with. "
@@ -326,14 +452,24 @@ class ModelPersistenceManager:
                 )
             logger.debug(f"Model {model_id} passed integrity verification")
         else:
+            if strict_mode:
+                raise ValueError(
+                    f"Model {model_id} has no HMAC signature and strict "
+                    "model loading is enabled (default). Models without "
+                    "integrity signatures cannot be loaded. Re-save the "
+                    "model to generate an HMAC, or set "
+                    "LUMINO_STRICT_MODEL_LOADING=false to allow loading "
+                    "unsigned legacy models."
+                )
             logger.warning(
                 f"Model {model_id} has no HMAC signature. "
+                "Loading in permissive mode (LUMINO_STRICT_MODEL_LOADING=false). "
                 "This model was saved before integrity verification was added. "
                 "Re-save the model to generate an HMAC signature."
             )
 
-        # Deserialize the verified model
-        model = joblib.load(model_file)
+        # Deserialize from the in-memory buffer -- never re-read from disk.
+        model = joblib.load(io.BytesIO(model_bytes))
 
         # Update last used time
         metadata["last_used_at"] = datetime.now().isoformat()

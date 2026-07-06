@@ -213,12 +213,108 @@ class TestIntegrityVerification:
         assert isinstance(metadata["model_hmac"], str)
         assert len(metadata["model_hmac"]) == 64  # SHA-256 hex digest
 
-    def test_legacy_model_without_hmac_warns(
-        self, manager: ModelPersistenceManager
+    def test_strict_mode_rejects_missing_meta_json(
+        self, manager: ModelPersistenceManager, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Models saved without HMAC (legacy) load with a warning, not an
-        error, to avoid breaking existing deployments.
+        """In strict mode (default), a model with no .meta.json at all is
+        rejected because there is no HMAC to verify.
         """
+        monkeypatch.setenv("LUMINO_STRICT_MODEL_LOADING", "true")
+        try:
+            import joblib
+        except ImportError:
+            pytest.skip("joblib not installed")
+
+        model_id = "no_meta_model"
+        model_file = manager.storage_dir / f"{model_id}.joblib"
+
+        # Write a model file with no accompanying metadata
+        joblib.dump({"orphan": True}, model_file)
+
+        # Update the index so the manager knows about it
+        index = manager._load_index()
+        index["models"].append(
+            {"model_id": model_id, "file_path": str(model_file), "is_active": False}
+        )
+        manager._save_index(index)
+
+        with pytest.raises(ValueError, match="no HMAC signature"):
+            manager.load_model(model_id)
+
+    def test_strict_mode_rejects_meta_without_hmac_key(
+        self, manager: ModelPersistenceManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """In strict mode, a model with meta.json but no model_hmac key is
+        rejected.
+        """
+        monkeypatch.setenv("LUMINO_STRICT_MODEL_LOADING", "true")
+        try:
+            import joblib
+        except ImportError:
+            pytest.skip("joblib not installed")
+
+        model_id = "legacy_no_hmac"
+        model_file = manager.storage_dir / f"{model_id}.joblib"
+        meta_file = manager.storage_dir / f"{model_id}.meta.json"
+
+        joblib.dump({"old": True}, model_file)
+        with open(meta_file, "w") as f:
+            json.dump({"model_id": model_id, "version": 0}, f)
+
+        index = manager._load_index()
+        index["models"].append(
+            {"model_id": model_id, "file_path": str(model_file), "is_active": False}
+        )
+        manager._save_index(index)
+
+        with pytest.raises(ValueError, match="no HMAC signature"):
+            manager.load_model(model_id)
+
+    def test_tampered_hmac_value_rejected(
+        self, manager: ModelPersistenceManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A model with a tampered (wrong) HMAC value is rejected."""
+        monkeypatch.setenv("LUMINO_STRICT_MODEL_LOADING", "true")
+        self._save_dummy_model(manager)
+        meta_file = manager.storage_dir / "test_model.meta.json"
+
+        # Tamper with the stored HMAC
+        with open(meta_file) as f:
+            metadata = json.load(f)
+        metadata["model_hmac"] = "a" * 64  # wrong HMAC
+        with open(meta_file, "w") as f:
+            json.dump(metadata, f, indent=2)
+
+        with pytest.raises(ValueError, match="integrity"):
+            manager.load_model("test_model")
+
+    def test_stripped_hmac_from_existing_metadata_rejected(
+        self, manager: ModelPersistenceManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Stripping model_hmac from an existing metadata file must not
+        allow loading in strict mode -- this is a downgrade attack.
+        """
+        monkeypatch.setenv("LUMINO_STRICT_MODEL_LOADING", "true")
+        self._save_dummy_model(manager)
+        meta_file = manager.storage_dir / "test_model.meta.json"
+
+        # Remove the model_hmac key from metadata (downgrade attack)
+        with open(meta_file) as f:
+            metadata = json.load(f)
+        del metadata["model_hmac"]
+        with open(meta_file, "w") as f:
+            json.dump(metadata, f, indent=2)
+
+        with pytest.raises(ValueError, match="no HMAC signature"):
+            manager.load_model("test_model")
+
+    def test_permissive_mode_allows_legacy_model(
+        self, manager: ModelPersistenceManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When LUMINO_STRICT_MODEL_LOADING=false, legacy models without
+        HMAC load with a warning (not an error) for migration purposes.
+        """
+        monkeypatch.setenv("LUMINO_STRICT_MODEL_LOADING", "false")
         try:
             import joblib
         except ImportError:
@@ -233,14 +329,13 @@ class TestIntegrityVerification:
         with open(meta_file, "w") as f:
             json.dump({"model_id": model_id, "version": 0}, f)
 
-        # Update the index so the manager knows about it
         index = manager._load_index()
         index["models"].append(
             {"model_id": model_id, "file_path": str(model_file), "is_active": False}
         )
         manager._save_index(index)
 
-        # Should load successfully (with a logged warning, not an exception)
+        # Should load successfully in permissive mode
         model, metadata = manager.load_model(model_id)
         assert model == {"old": True}
 
@@ -256,16 +351,54 @@ class TestSigningKey:
     """
 
     def test_signing_key_created_on_first_use(
-        self, manager: ModelPersistenceManager
+        self,
+        manager: ModelPersistenceManager,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
     ) -> None:
-        key_file = manager.storage_dir / ModelPersistenceManager._SIGNING_KEY_FILE
+        # Redirect Path.home() to tmp_path so we don't touch the real
+        # ~/.lumino directory during tests.
+        fake_home = tmp_path / "fakehome"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+        key_file = fake_home / ".lumino" / ModelPersistenceManager._SIGNING_KEY_FILE
         assert not key_file.exists()
         key = manager._get_signing_key()
         assert key_file.exists()
         assert len(key) == 32  # 256-bit key
 
-    def test_signing_key_reused(self, manager: ModelPersistenceManager) -> None:
+    def test_signing_key_reused(
+        self,
+        manager: ModelPersistenceManager,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
         """Subsequent calls return the same key."""
+        fake_home = tmp_path / "fakehome"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
         key1 = manager._get_signing_key()
         key2 = manager._get_signing_key()
         assert key1 == key2
+
+    def test_corrupted_key_file_rejected(
+        self,
+        manager: ModelPersistenceManager,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """A truncated or empty key file raises ValueError."""
+        fake_home = tmp_path / "fakehome"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+        key_dir = fake_home / ".lumino"
+        key_dir.mkdir(parents=True, exist_ok=True)
+        key_file = key_dir / ModelPersistenceManager._SIGNING_KEY_FILE
+        # Write a truncated key (only 10 bytes instead of 32)
+        key_file.write_bytes(b"x" * 10)
+
+        with pytest.raises(ValueError, match="corrupted"):
+            manager._get_signing_key()

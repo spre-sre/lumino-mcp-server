@@ -269,10 +269,6 @@ if k8s_core_api is not None and k8s_custom_api is not None:
 else:
     kubearchive_endpoint_discovery = None
 
-# KubeArchive host discovery cache (Issue #8)
-_kubearchive_host_cache: Dict[str, Any] = {"host": None, "ts": 0}
-KUBEARCHIVE_CACHE_TTL_SEC = 300
-
 
 def _require_k8s_client(client: object, name: str = "k8s_core_api") -> None:
     """Raise RuntimeError early if a required Kubernetes API client is None.
