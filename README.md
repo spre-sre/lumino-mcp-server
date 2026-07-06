@@ -522,7 +522,9 @@ lumino-mcp-server/
 │       ├── constants.py    # Shared constants
 │       ├── event_analysis.py    # Event processing logic
 │       ├── failure_analysis.py  # RCA algorithms
+│       ├── kubearchive_integration.py  # KubeArchive queries
 │       ├── log_analysis.py      # Log processing
+│       ├── ml_persistence.py    # ML model storage and integrity
 │       ├── resource_topology.py # Topology mapping
 │       ├── semantic_search.py   # NLP search
 │       └── utils.py             # Utility functions
@@ -591,7 +593,7 @@ LUMINO acts as a bridge between AI assistants and your Kubernetes infrastructure
 
 ### Key Features
 
-- **Stateless Design** - No data persistence, queries cluster in real-time
+- **Mostly Stateless Design** - Queries cluster in real-time; persists only ML model files and training data locally
 - **Automatic Transport Detection** - Switches between stdio (local) and HTTP (K8s) modes
 - **Token Budget Management** - Adaptive strategies to handle large log volumes
 - **Intelligent Caching** - Smart caching for frequently accessed data
@@ -1069,7 +1071,7 @@ LUMINO uses intelligent caching for frequently accessed data:
 
 - **15-minute cache** - For web-fetched content
 - **Session cache** - For hybrid log analysis
-- **No persistence** - All data queries cluster in real-time
+- **Minimal persistence** - ML models and training data stored locally; cluster data queried in real-time
 
 ### Concurrent Requests
 
@@ -1089,7 +1091,7 @@ The server handles multiple concurrent requests efficiently:
 | Kubernetes | 200m-1 | 512Mi-1Gi | Minimal |
 | High-load | 1-2 | 1-2Gi | Minimal |
 
-**Note**: LUMINO is stateless and requires minimal resources. Most processing happens in the AI assistant.
+**Note**: LUMINO requires minimal resources. ML models and training data are persisted locally; cluster queries are stateless. Most processing happens in the AI assistant.
 
 ## Troubleshooting
 
