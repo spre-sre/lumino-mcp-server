@@ -454,11 +454,11 @@ The SQLite database (`training_data.db`) contains four tables:
 | Table | Purpose |
 |-------|---------|
 | `log_samples` | Preprocessed log samples with extracted features, namespace, pod name, error indicators, and message entropy |
-| `failure_labels` | Failure events collected from Kubernetes events, failed PipelineRuns, and unhealthy pod statuses. Failure types include: `oom`, `crash`, `image`, `scheduling`, `storage`, `config`, `health`, `network`, `timeout`, `pipeline_failure`, `permission`, `resource_limits` |
+| `failure_labels` | Failure events collected from Kubernetes events, failed PipelineRuns, and unhealthy pod statuses. Failure types include: `oom`, `crash`, `image`, `scheduling`, `storage`, `config`, `health`, `network`, `timeout`, `pipeline_failure`, `permission`, `resource_limits`, `general`, `pod_failure` |
 | `log_failure_correlations` | Time-proximity correlations between log samples and failure events (scored 0.5--1.0 based on temporal distance within a 30-minute window) |
 | `training_runs` | Training run history recording model_id, samples used, labels used, performance metrics, and completion status |
 
-All four tables include a `cluster_id` column for multi-cluster support. The cluster ID is derived from the active kubeconfig context name (e.g. `api-stone-prod-p02-hjvn-p1-openshiftapps-com:6443`) or falls back to `in-cluster-{KUBERNETES_SERVICE_HOST}` when running inside a pod.
+All four tables define a `cluster_id` column for multi-cluster support. Currently, only `log_samples` and `failure_labels` actively populate it during writes; `log_failure_correlations` and `training_runs` leave it NULL. The cluster ID is derived from the active kubeconfig context name (e.g. `api-stone-prod-p02-hjvn-p1-openshiftapps-com:6443`) or falls back to `in-cluster-{KUBERNETES_SERVICE_HOST}` when running inside a pod.
 
 ### Clearing Stale Data
 
@@ -517,10 +517,7 @@ KubeArchive authentication uses the following priority chain:
 
 ### KubeArchive Configuration
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `KUBEARCHIVE_HOST` | Explicit KubeArchive API endpoint URL | Auto-detected |
-| `KUBEARCHIVE_ENABLED` | Set to `false` to disable KubeArchive integration | `true` |
+See the [Configuration](#configuration) section above for `KUBEARCHIVE_HOST` and `KUBEARCHIVE_ENABLED` environment variables.
 
 ## Prometheus/Thanos Integration
 
