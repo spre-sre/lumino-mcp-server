@@ -5,6 +5,19 @@ All notable changes to Lumino MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-07-06
+
+### Added
+- `manage_prediction_training_data` tool for viewing, collecting, and managing ML training data used by the predictive log analyzer
+- `query_kubearchive` tool for querying archived Kubernetes resources from KubeArchive with optional log retrieval
+
+### Fixed
+- Documentation: corrected tool count from 37 to 39 across README and server.json
+- Documentation: corrected false "stateless design" claims to acknowledge ML model persistence in `~/.lumino/`
+- Documentation: added all runtime dependencies to README Dependencies section
+- Documentation: added missing helper modules (`kubearchive_integration.py`, `ml_persistence.py`) to architecture file tree
+- Containerfile: updated version label from 0.1.0 to 0.9.3 to match pyproject.toml
+
 ## [0.9.2] - 2026-01-24
 
 ### Added

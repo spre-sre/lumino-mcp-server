@@ -68,14 +68,17 @@ class ProgressiveEventAnalyzer:
 
         # Get top critical events
         critical_events = [
-            e for e in self.classified_events if e.get("severity") == EventSeverity.CRITICAL.value
+            e
+            for e in self.classified_events
+            if e.get("severity") == EventSeverity.CRITICAL.value
         ][:max_items]
 
         # Get most recent high-impact events
         recent_high_impact = [
             e
             for e in self.timeline_sorted[-max_items:]
-            if e.get("severity") in [EventSeverity.CRITICAL.value, EventSeverity.HIGH.value]
+            if e.get("severity")
+            in [EventSeverity.CRITICAL.value, EventSeverity.HIGH.value]
         ]
 
         # Pattern summary
@@ -109,13 +112,17 @@ class ProgressiveEventAnalyzer:
             ],
         }
 
-    def get_detailed_analysis(self, event_filters: Dict[str, Any] = None) -> Dict[str, Any]:
+    def get_detailed_analysis(
+        self, event_filters: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Detailed analysis of specific events or categories."""
 
         # Apply filters if provided
         filtered_events = self.classified_events
         if event_filters:
-            filtered_events = self._apply_progressive_filters(self.classified_events, event_filters)
+            filtered_events = self._apply_progressive_filters(
+                self.classified_events, event_filters
+            )
 
         if not filtered_events:
             return {"message": "No events match the specified filters"}
@@ -128,7 +135,9 @@ class ProgressiveEventAnalyzer:
             "severity_analysis": self._analyze_by_severity(filtered_events),
             "temporal_analysis": self._analyze_temporal_patterns(filtered_events),
             "resource_impact": self._analyze_resource_impact(filtered_events),
-            "detailed_recommendations": self._generate_detailed_recommendations(filtered_events),
+            "detailed_recommendations": self._generate_detailed_recommendations(
+                filtered_events
+            ),
         }
 
         return analysis
@@ -141,7 +150,11 @@ class ProgressiveEventAnalyzer:
         if seed_event_id:
             # Find correlations for specific event
             seed_event = next(
-                (e for e in self.classified_events if str(e.get("timestamp", "")) == seed_event_id),
+                (
+                    e
+                    for e in self.classified_events
+                    if str(e.get("timestamp", "")) == seed_event_id
+                ),
                 None,
             )
             if seed_event:
@@ -161,7 +174,9 @@ class ProgressiveEventAnalyzer:
             "event_correlations": correlations,
             "failure_cascades": cascades,
             "root_cause_analysis": root_cause_groups,
-            "correlation_insights": self._generate_correlation_insights(correlations, cascades),
+            "correlation_insights": self._generate_correlation_insights(
+                correlations, cascades
+            ),
         }
 
     def _find_all_correlations(self) -> List[Dict[str, Any]]:
@@ -196,8 +211,10 @@ class ProgressiveEventAnalyzer:
                             if correlation_strength > 0.3:  # Threshold for correlation
                                 correlations.append(
                                     {
-                                        "event1": event1.get("event_string", "")[:100] + "...",
-                                        "event2": event2.get("event_string", "")[:100] + "...",
+                                        "event1": event1.get("event_string", "")[:100]
+                                        + "...",
+                                        "event2": event2.get("event_string", "")[:100]
+                                        + "...",
                                         "correlation_strength": correlation_strength,
                                         "time_window": window_time.isoformat(),
                                         "correlation_type": "temporal_proximity",
@@ -215,7 +232,9 @@ class ProgressiveEventAnalyzer:
         try:
             seed_timestamp = seed_event.get("timestamp", datetime.now())
             if isinstance(seed_timestamp, str):
-                seed_timestamp = datetime.fromisoformat(seed_timestamp.replace("Z", "+00:00"))
+                seed_timestamp = datetime.fromisoformat(
+                    seed_timestamp.replace("Z", "+00:00")
+                )
 
             related_events = []
 
@@ -226,11 +245,15 @@ class ProgressiveEventAnalyzer:
 
                 event_timestamp = event.get("timestamp", datetime.now())
                 if isinstance(event_timestamp, str):
-                    event_timestamp = datetime.fromisoformat(event_timestamp.replace("Z", "+00:00"))
+                    event_timestamp = datetime.fromisoformat(
+                        event_timestamp.replace("Z", "+00:00")
+                    )
 
                 time_diff = abs((event_timestamp - seed_timestamp).total_seconds())
                 if time_diff <= 600:  # Within 10 minutes
-                    correlation_strength = self._calculate_correlation_strength(seed_event, event)
+                    correlation_strength = self._calculate_correlation_strength(
+                        seed_event, event
+                    )
                     if correlation_strength > 0.2:
                         related_events.append(
                             {
@@ -243,7 +266,9 @@ class ProgressiveEventAnalyzer:
             return {
                 "seed_event": seed_event.get("event_string", "")[:100] + "...",
                 "related_events": sorted(
-                    related_events, key=lambda x: x["correlation_strength"], reverse=True
+                    related_events,
+                    key=lambda x: x["correlation_strength"],
+                    reverse=True,
                 )[:5],
             }
 
@@ -286,19 +311,25 @@ class ProgressiveEventAnalyzer:
 
         try:
             # Group events by severity and time
-            critical_events = [e for e in self.timeline_sorted if e.get("severity") == "CRITICAL"]
+            critical_events = [
+                e for e in self.timeline_sorted if e.get("severity") == "CRITICAL"
+            ]
 
             for i, critical_event in enumerate(critical_events):
                 # Look for events that follow this critical event
                 critical_time = critical_event.get("timestamp", datetime.now())
                 if isinstance(critical_time, str):
-                    critical_time = datetime.fromisoformat(critical_time.replace("Z", "+00:00"))
+                    critical_time = datetime.fromisoformat(
+                        critical_time.replace("Z", "+00:00")
+                    )
 
                 following_events = []
                 for event in self.timeline_sorted:
                     event_time = event.get("timestamp", datetime.now())
                     if isinstance(event_time, str):
-                        event_time = datetime.fromisoformat(event_time.replace("Z", "+00:00"))
+                        event_time = datetime.fromisoformat(
+                            event_time.replace("Z", "+00:00")
+                        )
 
                     # Events within 30 minutes after critical event
                     if 0 < (event_time - critical_time).total_seconds() <= 1800:
@@ -307,7 +338,10 @@ class ProgressiveEventAnalyzer:
                 if len(following_events) >= 3:  # Potential cascade
                     cascades.append(
                         {
-                            "trigger_event": critical_event.get("event_string", "")[:100] + "...",
+                            "trigger_event": critical_event.get("event_string", "")[
+                                :100
+                            ]
+                            + "...",
                             "cascade_events": len(following_events),
                             "cascade_duration_minutes": 30,
                             "cascade_type": "failure_propagation",
@@ -368,7 +402,9 @@ class ProgressiveEventAnalyzer:
             return {
                 root_cause: {
                     "count": len(events),
-                    "sample_events": [e.get("event_string", "")[:80] + "..." for e in events[:3]],
+                    "sample_events": [
+                        e.get("event_string", "")[:80] + "..." for e in events[:3]
+                    ],
                 }
                 for root_cause, events in root_causes.items()
                 if len(events) > 0
@@ -401,7 +437,9 @@ class ProgressiveEventAnalyzer:
             if cascades:
                 insights.append(f"Detected {len(cascades)} potential failure cascades")
                 total_cascade_events = sum(c.get("cascade_events", 0) for c in cascades)
-                insights.append(f"Cascade analysis shows {total_cascade_events} related events")
+                insights.append(
+                    f"Cascade analysis shows {total_cascade_events} related events"
+                )
 
             if not correlations and not cascades:
                 insights.append(
@@ -449,7 +487,9 @@ class ProgressiveEventAnalyzer:
 
         common_terms = ["failed", "error", "oom", "timeout", "unhealthy", "imagepull"]
         patterns["common_issues"] = {
-            term: all_text.count(term) for term in common_terms if all_text.count(term) > 0
+            term: all_text.count(term)
+            for term in common_terms
+            if all_text.count(term) > 0
         }
 
         return patterns
@@ -481,7 +521,9 @@ class ProgressiveEventAnalyzer:
             # Filter by time range (last N hours)
             hours = filters["time_range"]
             cutoff = datetime.now() - timedelta(hours=hours)
-            filtered = [e for e in filtered if e.get("timestamp", datetime.now()) >= cutoff]
+            filtered = [
+                e for e in filtered if e.get("timestamp", datetime.now()) >= cutoff
+            ]
 
         if "keywords" in filters:
             keywords = (
@@ -492,7 +534,10 @@ class ProgressiveEventAnalyzer:
             filtered = [
                 e
                 for e in filtered
-                if any(keyword.lower() in e.get("event_string", "").lower() for keyword in keywords)
+                if any(
+                    keyword.lower() in e.get("event_string", "").lower()
+                    for keyword in keywords
+                )
             ]
 
         return filtered
@@ -580,7 +625,9 @@ class ProgressiveEventAnalyzer:
 
         return severity_analysis
 
-    def _analyze_temporal_patterns(self, events: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _analyze_temporal_patterns(
+        self, events: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """Analyze temporal patterns in events."""
         if not events:
             return {"message": "No events to analyze"}
@@ -600,7 +647,9 @@ class ProgressiveEventAnalyzer:
             start_time = sorted_events[0].get("timestamp", datetime.now())
             end_time = sorted_events[-1].get("timestamp", datetime.now())
 
-            if hasattr(start_time, "total_seconds") or hasattr(end_time, "total_seconds"):
+            if hasattr(start_time, "total_seconds") or hasattr(
+                end_time, "total_seconds"
+            ):
                 try:
                     time_span = end_time - start_time
                     temporal_analysis["time_span"] = str(time_span)
@@ -629,7 +678,11 @@ class ProgressiveEventAnalyzer:
 
     def _analyze_resource_impact(self, events: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Analyze resource impact of events."""
-        resource_impact = {"affected_resources": {}, "resource_types": {}, "severity_impact": {}}
+        resource_impact = {
+            "affected_resources": {},
+            "resource_types": {},
+            "severity_impact": {},
+        }
 
         for event in events:
             event_str = event.get("event_string", "").lower()
@@ -654,7 +707,10 @@ class ProgressiveEventAnalyzer:
 
             severity = event.get("severity", "UNKNOWN")
             if severity not in resource_impact["severity_impact"]:
-                resource_impact["severity_impact"][severity] = {"count": 0, "resources": set()}
+                resource_impact["severity_impact"][severity] = {
+                    "count": 0,
+                    "resources": set(),
+                }
 
             resource_impact["severity_impact"][severity]["count"] += 1
 
@@ -666,7 +722,9 @@ class ProgressiveEventAnalyzer:
 
         return resource_impact
 
-    def _generate_detailed_recommendations(self, events: List[Dict[str, Any]]) -> List[str]:
+    def _generate_detailed_recommendations(
+        self, events: List[Dict[str, Any]]
+    ) -> List[str]:
         """Generate detailed recommendations based on event analysis."""
         recommendations = []
 
@@ -769,7 +827,9 @@ def classify_event_severity_from_string(event_str: str) -> str:
         after_bracket = event_content[bracket_end + 2 :].strip()
         if after_bracket.startswith("Normal:") or after_bracket.startswith("normal:"):
             is_normal_event = True
-        elif after_bracket.startswith("Warning:") or after_bracket.startswith("warning:"):
+        elif after_bracket.startswith("Warning:") or after_bracket.startswith(
+            "warning:"
+        ):
             is_warning_event = True
 
     # For Normal events, only escalate if content has CRITICAL keywords
@@ -818,7 +878,9 @@ def classify_event_category_from_string(event_str: str) -> str:
     if is_normal_event:
         # For Normal events, check non-failure categories only
         non_failure_categories = {
-            k: v for k, v in SMART_EVENTS_CONFIG["category_keywords"].items() if k != "FAILURE"
+            k: v
+            for k, v in SMART_EVENTS_CONFIG["category_keywords"].items()
+            if k != "FAILURE"
         }
         for category, keywords in non_failure_categories.items():
             if any(keyword in event_lower for keyword in keywords):
@@ -834,7 +896,9 @@ def classify_event_category_from_string(event_str: str) -> str:
     return EventCategory.OTHER.value
 
 
-def calculate_relevance_score_from_string(event_str: str, focus_areas: List[str]) -> float:
+def calculate_relevance_score_from_string(
+    event_str: str, focus_areas: List[str]
+) -> float:
     """Calculate relevance score based on focus areas."""
 
     score = 0.0
@@ -868,7 +932,9 @@ def extract_timestamp_from_string(event_str: str) -> datetime:
     """Extract timestamp from event string."""
 
     # Try to find ISO timestamp (with T separator)
-    iso_pattern = r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)"
+    iso_pattern = (
+        r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)"
+    )
     match = re.search(iso_pattern, event_str)
 
     if match:
@@ -881,7 +947,9 @@ def extract_timestamp_from_string(event_str: str) -> datetime:
             pass
 
     # Try space-separated format: [2026-03-11 04:44:36+00:00] or 2026-03-11 04:44:36+00:00
-    space_pattern = r"(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?)"
+    space_pattern = (
+        r"(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?)"
+    )
     match = re.search(space_pattern, event_str)
 
     if match:
@@ -924,7 +992,9 @@ def smart_sample_string_events(
             "event_string": event_str,
             "severity": classify_event_severity_from_string(event_str),
             "category": classify_event_category_from_string(event_str),
-            "relevance_score": calculate_relevance_score_from_string(event_str, focus_areas),
+            "relevance_score": calculate_relevance_score_from_string(
+                event_str, focus_areas
+            ),
             "timestamp": extract_timestamp_from_string(event_str),
             "token_estimate": estimate_string_event_tokens(event_str),
         }
@@ -932,7 +1002,9 @@ def smart_sample_string_events(
 
     # Sort by priority
     def sort_key(e):
-        severity_weight = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}.get(e["severity"], 0)
+        severity_weight = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}.get(
+            e["severity"], 0
+        )
         return (severity_weight, e["relevance_score"], e["timestamp"])
 
     classified_events.sort(key=sort_key, reverse=True)
@@ -960,7 +1032,10 @@ def generate_string_events_summary(
     total_events = len(classified_events)
 
     if total_events == 0:
-        return {"total_events": 0, "message": "No events found in the specified timeframe"}
+        return {
+            "total_events": 0,
+            "message": "No events found in the specified timeframe",
+        }
 
     # Count by severity and category
     severity_counts: Dict[str, int] = {}
@@ -983,7 +1058,8 @@ def generate_string_events_summary(
             relevant_count = sum(
                 1
                 for event in classified_events
-                if event["severity"] in target_items or event["category"] in target_items
+                if event["severity"] in target_items
+                or event["category"] in target_items
             )
             focus_coverage[focus_area] = {
                 "relevant_events": relevant_count,
@@ -996,7 +1072,9 @@ def generate_string_events_summary(
     if classified_events:
         timestamps = [event["timestamp"] for event in classified_events]
         time_span = max(timestamps) - min(timestamps)
-        event_rate = total_events / max(time_span.total_seconds() / 3600, 0.1)  # events per hour
+        event_rate = total_events / max(
+            time_span.total_seconds() / 3600, 0.1
+        )  # events per hour
     else:
         time_span = timedelta(0)
         event_rate = 0
@@ -1006,13 +1084,18 @@ def generate_string_events_summary(
         "severity_breakdown": severity_counts,
         "category_breakdown": category_counts,
         "focus_area_coverage": focus_coverage,
-        "time_analysis": {"time_span": str(time_span), "event_rate_per_hour": round(event_rate, 2)},
+        "time_analysis": {
+            "time_span": str(time_span),
+            "event_rate_per_hour": round(event_rate, 2),
+        },
         "critical_events": severity_counts.get("CRITICAL", 0),
         "high_severity_events": severity_counts.get("HIGH", 0),
     }
 
 
-def generate_string_events_insights(classified_events: List[Dict[str, Any]]) -> List[str]:
+def generate_string_events_insights(
+    classified_events: List[Dict[str, Any]],
+) -> List[str]:
     """Generate insights from classified events."""
 
     insights = []
@@ -1027,7 +1110,9 @@ def generate_string_events_insights(classified_events: List[Dict[str, Any]]) -> 
     high_count = len([e for e in classified_events if e["severity"] == "HIGH"])
 
     if critical_count > 0:
-        insights.append(f"{critical_count} critical events detected requiring immediate attention")
+        insights.append(
+            f"{critical_count} critical events detected requiring immediate attention"
+        )
 
     if high_count > total_events * 0.3:
         insights.append(
@@ -1048,7 +1133,9 @@ def generate_string_events_insights(classified_events: List[Dict[str, Any]]) -> 
     if len(timestamps) > 1:
         time_span = max(timestamps) - min(timestamps)
         if time_span.total_seconds() < 3600:  # Less than 1 hour
-            insights.append("Events clustered in short time window - potential incident burst")
+            insights.append(
+                "Events clustered in short time window - potential incident burst"
+            )
 
     # Pattern insights - use extracted content to avoid false positives from pod names
     all_text = " ".join(
@@ -1071,12 +1158,16 @@ def generate_string_events_insights(classified_events: List[Dict[str, Any]]) -> 
         insights.append("Volume mount issues detected - check storage configuration")
 
     if "createcontainerconfigerror" in all_text:
-        insights.append("Container configuration errors found - check configmaps and secrets")
+        insights.append(
+            "Container configuration errors found - check configmaps and secrets"
+        )
 
     return insights
 
 
-def generate_string_events_recommendations(classified_events: List[Dict[str, Any]]) -> List[str]:
+def generate_string_events_recommendations(
+    classified_events: List[Dict[str, Any]],
+) -> List[str]:
     """Generate recommendations based on classified events."""
 
     recommendations = []
@@ -1093,10 +1184,14 @@ def generate_string_events_recommendations(classified_events: List[Dict[str, Any
             "IMMEDIATE: Activate incident response - multiple critical events detected"
         )
     elif critical_count > 0:
-        recommendations.append("HIGH PRIORITY: Investigate critical events within 30 minutes")
+        recommendations.append(
+            "HIGH PRIORITY: Investigate critical events within 30 minutes"
+        )
 
     if high_count >= 10:
-        recommendations.append("Schedule investigation of high-severity events within 2 hours")
+        recommendations.append(
+            "Schedule investigation of high-severity events within 2 hours"
+        )
 
     # Category-specific recommendations
     category_counts = Counter([e["category"] for e in classified_events])
@@ -1104,23 +1199,37 @@ def generate_string_events_recommendations(classified_events: List[Dict[str, Any
     for category, count in category_counts.items():
         if count >= 3:  # Lower threshold for actionable recommendations
             if category == "FAILURE":
-                recommendations.append("Review application stability and error handling mechanisms")
+                recommendations.append(
+                    "Review application stability and error handling mechanisms"
+                )
             elif category == "NETWORKING":
-                recommendations.append("Check network policies and service connectivity")
+                recommendations.append(
+                    "Check network policies and service connectivity"
+                )
             elif category == "STORAGE":
-                recommendations.append("Verify storage backend health and volume mounts")
+                recommendations.append(
+                    "Verify storage backend health and volume mounts"
+                )
             elif category == "SCHEDULING":
                 recommendations.append("Review node capacity and resource allocation")
             elif category == "IMAGE":
-                recommendations.append("Check image registry connectivity and image names")
+                recommendations.append(
+                    "Check image registry connectivity and image names"
+                )
             elif category == "CONFIGURATION":
-                recommendations.append("Verify configmaps and secrets are properly configured")
+                recommendations.append(
+                    "Verify configmaps and secrets are properly configured"
+                )
             elif category == "RESOURCE":
-                recommendations.append("Review resource limits and requests for affected pods")
+                recommendations.append(
+                    "Review resource limits and requests for affected pods"
+                )
             elif category == "SECURITY":
                 recommendations.append("Check RBAC permissions and security policies")
             elif category == "SCALING":
-                recommendations.append("Review HPA configuration and scaling thresholds")
+                recommendations.append(
+                    "Review HPA configuration and scaling thresholds"
+                )
             elif category == "HEALTH":
                 recommendations.append(
                     "Check probe configurations and application health endpoints"
@@ -1129,7 +1238,9 @@ def generate_string_events_recommendations(classified_events: List[Dict[str, Any
     # General recommendations
     total_events = len(classified_events)
     if total_events > 50:
-        recommendations.append("High event volume detected - consider implementing log aggregation")
+        recommendations.append(
+            "High event volume detected - consider implementing log aggregation"
+        )
 
     if not recommendations:
         recommendations.append("Continue monitoring - event patterns appear normal")
@@ -1172,7 +1283,9 @@ class MLPatternDetector:
             return []
 
         # Calculate event intervals
-        sorted_events = sorted(self.events, key=lambda x: x.get("timestamp", datetime.now()))
+        sorted_events = sorted(
+            self.events, key=lambda x: x.get("timestamp", datetime.now())
+        )
         intervals = []
 
         for i in range(1, len(sorted_events)):
@@ -1313,7 +1426,9 @@ class MLPatternDetector:
 
         try:
             # Sort events by time
-            sorted_events = sorted(self.events, key=lambda x: x.get("timestamp", datetime.now()))
+            sorted_events = sorted(
+                self.events, key=lambda x: x.get("timestamp", datetime.now())
+            )
 
             # Look for severity escalation patterns
             for i in range(len(sorted_events) - 1):
@@ -1341,8 +1456,10 @@ class MLPatternDetector:
                             "from_severity": current_severity,
                             "to_severity": next_severity,
                             "escalation_time_seconds": time_diff,
-                            "current_event": current_event.get("event_string", "")[:80] + "...",
-                            "escalated_event": next_event.get("event_string", "")[:80] + "...",
+                            "current_event": current_event.get("event_string", "")[:80]
+                            + "...",
+                            "escalated_event": next_event.get("event_string", "")[:80]
+                            + "...",
                             "escalation_factor": next_level - current_level,
                         }
                     )
@@ -1366,16 +1483,23 @@ class MLPatternDetector:
             for event in self.events:
                 event_content = event.get("event_string", "").lower()
 
-                if any(pattern in event_content for pattern in ["memory", "oom", "out of memory"]):
+                if any(
+                    pattern in event_content
+                    for pattern in ["memory", "oom", "out of memory"]
+                ):
                     resource_patterns["memory_issues"].append(
                         event.get("event_string", "")[:100] + "..."
                     )
-                elif any(pattern in event_content for pattern in ["cpu", "throttl", "processor"]):
+                elif any(
+                    pattern in event_content
+                    for pattern in ["cpu", "throttl", "processor"]
+                ):
                     resource_patterns["cpu_issues"].append(
                         event.get("event_string", "")[:100] + "..."
                     )
                 elif any(
-                    pattern in event_content for pattern in ["disk", "storage", "volume", "pvc"]
+                    pattern in event_content
+                    for pattern in ["disk", "storage", "volume", "pvc"]
                 ):
                     resource_patterns["disk_issues"].append(
                         event.get("event_string", "")[:100] + "..."
@@ -1387,7 +1511,10 @@ class MLPatternDetector:
                     resource_patterns["network_issues"].append(
                         event.get("event_string", "")[:100] + "..."
                     )
-                elif any(pattern in event_content for pattern in ["pod", "container", "image"]):
+                elif any(
+                    pattern in event_content
+                    for pattern in ["pod", "container", "image"]
+                ):
                     resource_patterns["pod_issues"].append(
                         event.get("event_string", "")[:100] + "..."
                     )
@@ -1434,7 +1561,9 @@ class MLPatternDetector:
                                 "rarity_score": 1 - frequency,
                                 "pattern": pattern,
                                 "severity": event.get("severity", "UNKNOWN"),
-                                "timestamp": event.get("timestamp", datetime.now()).isoformat()
+                                "timestamp": event.get(
+                                    "timestamp", datetime.now()
+                                ).isoformat()
                                 if isinstance(event.get("timestamp"), datetime)
                                 else str(event.get("timestamp", "")),
                             }
@@ -1473,17 +1602,25 @@ class MLPatternDetector:
                 except (TypeError, ValueError):
                     pass
 
-            if len(recent_events) > len(self.events) * 0.5:  # More than 50% of events in last hour
-                indicators["trending_issues"].append("High event frequency in recent period")
+            if (
+                len(recent_events) > len(self.events) * 0.5
+            ):  # More than 50% of events in last hour
+                indicators["trending_issues"].append(
+                    "High event frequency in recent period"
+                )
                 # Only escalate risk if recent events include HIGH/CRITICAL severity
                 recent_high = [
-                    e for e in recent_events if e.get("severity") in ("HIGH", "CRITICAL")
+                    e
+                    for e in recent_events
+                    if e.get("severity") in ("HIGH", "CRITICAL")
                 ]
                 if recent_high:
                     indicators["escalation_risk"] = "HIGH"
 
             # Check for critical event trends
-            critical_recent = [e for e in recent_events if e.get("severity") == "CRITICAL"]
+            critical_recent = [
+                e for e in recent_events if e.get("severity") == "CRITICAL"
+            ]
             if len(critical_recent) > 2:
                 indicators["trending_issues"].append(
                     f"{len(critical_recent)} critical events in last hour"
@@ -1492,10 +1629,14 @@ class MLPatternDetector:
 
             # Pattern stability analysis
             if len(self.events) > 5:
-                severity_distribution = Counter([e.get("severity", "UNKNOWN") for e in self.events])
+                severity_distribution = Counter(
+                    [e.get("severity", "UNKNOWN") for e in self.events]
+                )
                 most_common_severity = severity_distribution.most_common(1)[0]
 
-                if most_common_severity[1] / len(self.events) > 0.8:  # 80% same severity
+                if (
+                    most_common_severity[1] / len(self.events) > 0.8
+                ):  # 80% same severity
                     indicators["pattern_stability"] = "STABLE"
                 else:
                     indicators["pattern_stability"] = "VARIABLE"
@@ -1520,7 +1661,9 @@ class LogMetricsIntegrator:
     def __init__(self, events: List[Dict[str, Any]]):
         self.events = events
 
-    async def correlate_with_logs(self, namespace: str, time_window: str = "2h") -> Dict[str, Any]:
+    async def correlate_with_logs(
+        self, namespace: str, time_window: str = "2h"
+    ) -> Dict[str, Any]:
         """Correlate events with log data by extracting log-relevant patterns from events."""
 
         try:
@@ -1528,7 +1671,9 @@ class LogMetricsIntegrator:
             log_insights = []
 
             # Extract error-related events that would correlate with log patterns
-            error_events = [e for e in self.events if e.get("severity") in ("HIGH", "CRITICAL")]
+            error_events = [
+                e for e in self.events if e.get("severity") in ("HIGH", "CRITICAL")
+            ]
             if error_events:
                 log_insights.append(
                     f"{len(error_events)} high/critical severity events may have corresponding log entries"
@@ -1538,7 +1683,9 @@ class LogMetricsIntegrator:
                 for e in error_events:
                     cat = e.get("category", "unknown")
                     categories[cat] = categories.get(cat, 0) + 1
-                for cat, count in sorted(categories.items(), key=lambda x: x[1], reverse=True)[:5]:
+                for cat, count in sorted(
+                    categories.items(), key=lambda x: x[1], reverse=True
+                )[:5]:
                     correlations.append(
                         {
                             "event_category": cat,
@@ -1584,7 +1731,10 @@ class LogMetricsIntegrator:
             "memory": [
                 e
                 for e in self.events
-                if any(kw in e.get("event_string", "").lower() for kw in ["memory", "oom", "evict"])
+                if any(
+                    kw in e.get("event_string", "").lower()
+                    for kw in ["memory", "oom", "evict"]
+                )
             ],
             "network": [
                 e
@@ -1603,7 +1753,9 @@ class LogMetricsIntegrator:
                         "type": f"{resource_type}_event_correlation",
                         "event_count": len(events),
                         "description": f"{len(events)} {resource_type}-related event(s) detected",
-                        "sample_events": [e.get("event_string", "")[:150] for e in events[:3]],
+                        "sample_events": [
+                            e.get("event_string", "")[:150] for e in events[:3]
+                        ],
                     }
                 )
 
@@ -1649,7 +1801,9 @@ class RunbookSuggestionEngine:
                             "runbook": runbook,
                             "confidence": confidence,
                             "relevance_reason": self._explain_relevance(issue_type),
-                            "priority": self._calculate_priority(issue_type, confidence),
+                            "priority": self._calculate_priority(
+                                issue_type, confidence
+                            ),
                         }
                     )
 
@@ -1869,31 +2023,49 @@ class RunbookSuggestionEngine:
             "bundle",
             "resolver",
         ]
-        bundle_score = sum(all_text.count(ind) for ind in bundle_indicators) / total_events
+        bundle_score = (
+            sum(all_text.count(ind) for ind in bundle_indicators) / total_events
+        )
         if bundle_score > 0.05:
             issue_scores["task_bundle_resolution"] = min(1.0, bundle_score * 3)
 
         # Push snapshot / OCI artifact failures
-        push_indicators = ["push-snapshot", "oras resolve", "push_snapshot", "not found"]
+        push_indicators = [
+            "push-snapshot",
+            "oras resolve",
+            "push_snapshot",
+            "not found",
+        ]
         push_score = sum(all_text.count(ind) for ind in push_indicators) / total_events
         if push_score > 0.05:
             issue_scores["push_snapshot_failure"] = min(1.0, push_score * 3)
 
         # Trusted artifact failures
-        ta_indicators = ["create-trusted-artifact", "use-trusted-artifact", "trusted artifact"]
+        ta_indicators = [
+            "create-trusted-artifact",
+            "use-trusted-artifact",
+            "trusted artifact",
+        ]
         ta_score = sum(all_text.count(ind) for ind in ta_indicators) / total_events
         if ta_score > 0.05:
             issue_scores["trusted_artifact_failure"] = min(1.0, ta_score * 3)
 
         # Registry auth failures
-        auth_indicators = ["unauthorized", "access denied", "forbidden", "authentication required"]
+        auth_indicators = [
+            "unauthorized",
+            "access denied",
+            "forbidden",
+            "authentication required",
+        ]
         auth_score = sum(all_text.count(ind) for ind in auth_indicators) / total_events
         if auth_score > 0.05:
             issue_scores["registry_auth_failure"] = min(1.0, auth_score * 3)
 
         # Pyxis registration failures
         pyxis_indicators = ["create-pyxis-image", "pyxis", "step-create-pyxis"]
-        pyxis_score = sum(all_text.count(ind) for ind in pyxis_indicators) / total_events
+        pyxis_score = (
+            sum(all_text.count(ind) for ind in pyxis_indicators) / total_events
+        )
         if pyxis_score > 0.05:
             issue_scores["pyxis_registration_failure"] = min(1.0, pyxis_score * 3)
 
@@ -1904,7 +2076,9 @@ class RunbookSuggestionEngine:
             "timeout",
             "pipelinerun was stopping",
         ]
-        timeout_score = sum(all_text.count(ind) for ind in timeout_indicators) / total_events
+        timeout_score = (
+            sum(all_text.count(ind) for ind in timeout_indicators) / total_events
+        )
         if timeout_score > 0.05:
             issue_scores["pipeline_timeout"] = min(1.0, timeout_score * 2.5)
 
@@ -1963,20 +2137,32 @@ class RunbookSuggestionEngine:
                 "registry_auth_failure",
             ]
         ):
-            crash_indicators = ["crash", "crashloopbackoff", "exit", "failed", "restart"]
-            crash_score = sum(all_text.count(ind) for ind in crash_indicators) / total_events
+            crash_indicators = [
+                "crash",
+                "crashloopbackoff",
+                "exit",
+                "failed",
+                "restart",
+            ]
+            crash_score = (
+                sum(all_text.count(ind) for ind in crash_indicators) / total_events
+            )
             if crash_score > 0.1:
                 issue_scores["pod_crash_loop"] = min(1.0, crash_score * 2)
 
         # Memory issues
         memory_indicators = ["oom", "oomkilled", "out of memory", "killed", "evicted"]
-        memory_score = sum(all_text.count(ind) for ind in memory_indicators) / total_events
+        memory_score = (
+            sum(all_text.count(ind) for ind in memory_indicators) / total_events
+        )
         if memory_score > 0.05:
             issue_scores["memory_exhaustion"] = min(1.0, memory_score * 3)
 
         # Network issues
         network_indicators = ["network", "dns", "connection refused", "unreachable"]
-        network_score = sum(all_text.count(ind) for ind in network_indicators) / total_events
+        network_score = (
+            sum(all_text.count(ind) for ind in network_indicators) / total_events
+        )
         if network_score > 0.05:
             issue_scores["network_connectivity"] = min(1.0, network_score * 2.5)
 
@@ -2036,7 +2222,9 @@ def assess_overall_risk(analytics_result: Dict[str, Any]) -> Dict[str, Any]:
     if "detailed_analysis" in base_analysis:
         detailed = base_analysis["detailed_analysis"]
         if "severity_analysis" in detailed:
-            critical_events = detailed["severity_analysis"].get("CRITICAL", {}).get("count", 0)
+            critical_events = (
+                detailed["severity_analysis"].get("CRITICAL", {}).get("count", 0)
+            )
             if critical_events > 5:
                 risk_factors.append(f"High critical event count: {critical_events}")
                 risk_score += 0.3
@@ -2063,7 +2251,9 @@ def assess_overall_risk(analytics_result: Dict[str, Any]) -> Dict[str, Any]:
 
     # Runbook urgency
     runbooks = analytics_result.get("runbook_suggestions", [])
-    critical_runbooks = [r for r in runbooks if r.get("runbook", {}).get("severity") == "CRITICAL"]
+    critical_runbooks = [
+        r for r in runbooks if r.get("runbook", {}).get("severity") == "CRITICAL"
+    ]
     if critical_runbooks:
         risk_factors.append(f"Critical runbooks required: {len(critical_runbooks)}")
         risk_score += 0.25
@@ -2137,7 +2327,9 @@ def generate_strategic_recommendations(analytics_result: Dict[str, Any]) -> List
         )
         recommendations.append("Escalate to on-call team and stakeholders immediately")
     elif risk_level == "HIGH":
-        recommendations.append("HIGH PRIORITY: Address identified issues within the next 2-4 hours")
+        recommendations.append(
+            "HIGH PRIORITY: Address identified issues within the next 2-4 hours"
+        )
 
     # ML pattern recommendations
     ml_patterns = analytics_result.get("ml_patterns", {})
@@ -2213,8 +2405,12 @@ async def generate_comprehensive_insights(
 
     metrics_corr = analytics_result.get("metrics_correlation", {})
     if metrics_corr.get("correlations"):
-        cpu_issues = any(c["type"] == "cpu_correlation" for c in metrics_corr["correlations"])
-        memory_issues = any(c["type"] == "memory_correlation" for c in metrics_corr["correlations"])
+        cpu_issues = any(
+            c["type"] == "cpu_correlation" for c in metrics_corr["correlations"]
+        )
+        memory_issues = any(
+            c["type"] == "memory_correlation" for c in metrics_corr["correlations"]
+        )
         if cpu_issues or memory_issues:
             insights.append(
                 "Resource Correlation: Performance metrics confirm resource-related event patterns"

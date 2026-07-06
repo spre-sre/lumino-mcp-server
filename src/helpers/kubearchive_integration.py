@@ -170,14 +170,18 @@ class KubeArchiveEndpointDiscovery:
         # Step 2: Check for OpenShift Route (OpenShift clusters)
         endpoint = await self._check_route()
         if endpoint:
-            logger.info(f"KubeArchive endpoint discovered via OpenShift Route: {endpoint}")
+            logger.info(
+                f"KubeArchive endpoint discovered via OpenShift Route: {endpoint}"
+            )
             self._cached_endpoint = endpoint
             return endpoint
 
         # Step 3: Check for Kubernetes Ingress (Kubernetes clusters)
         endpoint = await self._check_ingress()
         if endpoint:
-            logger.info(f"KubeArchive endpoint discovered via Kubernetes Ingress: {endpoint}")
+            logger.info(
+                f"KubeArchive endpoint discovered via Kubernetes Ingress: {endpoint}"
+            )
             self._cached_endpoint = endpoint
             return endpoint
 
@@ -277,7 +281,10 @@ class KubeArchiveEndpointDiscovery:
                                 if ingress.spec.tls:
                                     # Check if this host is in TLS config
                                     for tls_config in ingress.spec.tls:
-                                        if tls_config.hosts and rule.host in tls_config.hosts:
+                                        if (
+                                            tls_config.hosts
+                                            and rule.host in tls_config.hosts
+                                        ):
                                             protocol = "https"
                                             break
 
@@ -346,12 +353,16 @@ class KubeArchiveEndpointDiscovery:
                 return None
 
             # Load the kubeconfig file to extract the cluster server URL
-            kubeconfig_path = os.getenv("KUBECONFIG", os.path.expanduser("~/.kube/config"))
+            kubeconfig_path = os.getenv(
+                "KUBECONFIG", os.path.expanduser("~/.kube/config")
+            )
             try:
                 with open(kubeconfig_path, "r") as f:
                     kubeconfig = yaml.safe_load(f)
             except Exception as e:
-                logger.debug(f"Could not read kubeconfig file at {kubeconfig_path}: {e}")
+                logger.debug(
+                    f"Could not read kubeconfig file at {kubeconfig_path}: {e}"
+                )
                 return None
 
             # Find the cluster entry matching the active context
@@ -362,7 +373,9 @@ class KubeArchiveEndpointDiscovery:
                     break
 
             if not server_url:
-                logger.debug(f"No server URL found for cluster '{cluster_name}' in kubeconfig")
+                logger.debug(
+                    f"No server URL found for cluster '{cluster_name}' in kubeconfig"
+                )
                 return None
 
             logger.debug(f"Kubeconfig cluster server URL: {server_url}")
@@ -489,7 +502,9 @@ class KubeArchiveEndpointDiscovery:
             self.k8s_custom_api.list_cluster_custom_object(
                 group="route.openshift.io", version="v1", plural="routes", limit=1
             )
-            logger.debug("Detected OpenShift cluster (route.openshift.io API available)")
+            logger.debug(
+                "Detected OpenShift cluster (route.openshift.io API available)"
+            )
             return True
         except Exception as e:
             logger.debug(
@@ -524,7 +539,9 @@ class KubeArchiveEndpointDiscovery:
             s.bind(("localhost", 0))
             return s.getsockname()[1]
 
-    async def _setup_port_forward(self, in_cluster_endpoint: str, namespace: str) -> Optional[str]:
+    async def _setup_port_forward(
+        self, in_cluster_endpoint: str, namespace: str
+    ) -> Optional[str]:
         """
         Setup kubectl port-forward for local development.
 
@@ -571,11 +588,15 @@ class KubeArchiveEndpointDiscovery:
             self._port_forward_port = local_port
             local_endpoint = f"{protocol}://localhost:{local_port}"
 
-            logger.info(f"✓ Port-forward established: {local_endpoint} -> {in_cluster_endpoint}")
+            logger.info(
+                f"✓ Port-forward established: {local_endpoint} -> {in_cluster_endpoint}"
+            )
             return local_endpoint
 
         except FileNotFoundError:
-            logger.warning("kubectl not found in PATH. Cannot setup automatic port-forward")
+            logger.warning(
+                "kubectl not found in PATH. Cannot setup automatic port-forward"
+            )
             logger.info(
                 "Please run manually: kubectl port-forward -n kubearchive svc/kubearchive-api-server 8081:8081"
             )
@@ -697,7 +718,9 @@ class KubeArchiveClient:
 
         # Only create service account for non-OpenShift Kubernetes clusters
         if not self._is_openshift_cluster():
-            logger.info("Attempting to create service account token for Kubernetes cluster")
+            logger.info(
+                "Attempting to create service account token for Kubernetes cluster"
+            )
             token = await self._create_local_dev_token()
             if token:
                 return token
@@ -742,12 +765,19 @@ class KubeArchiveClient:
         try:
             # Try to list OpenShift-specific API resources (routes)
             self.k8s_core_api.api_client.call_api(
-                "/apis/route.openshift.io/v1", "GET", response_type=object, _preload_content=False
+                "/apis/route.openshift.io/v1",
+                "GET",
+                response_type=object,
+                _preload_content=False,
             )
-            logger.debug("Detected OpenShift cluster (route.openshift.io API available)")
+            logger.debug(
+                "Detected OpenShift cluster (route.openshift.io API available)"
+            )
             return True
         except Exception as e:
-            logger.debug(f"Not an OpenShift cluster (route.openshift.io API not available): {e}")
+            logger.debug(
+                f"Not an OpenShift cluster (route.openshift.io API not available): {e}"
+            )
             return False
 
     async def _get_openshift_token(self) -> Optional[str]:
@@ -780,7 +810,9 @@ class KubeArchiveClient:
             if token_result.returncode == 0:
                 token = token_result.stdout.strip()
                 if token:
-                    logger.info(f"✓ Retrieved token from oc CLI (length: {len(token)} chars)")
+                    logger.info(
+                        f"✓ Retrieved token from oc CLI (length: {len(token)} chars)"
+                    )
                     # Also verify the token works by checking cluster connectivity
                     try:
                         verify_result = subprocess.run(
@@ -856,7 +888,9 @@ class KubeArchiveClient:
 
         # Don't create service account for OpenShift - user should use oc login token
         if self._is_openshift_cluster():
-            logger.debug("OpenShift cluster detected, skipping service account creation")
+            logger.debug(
+                "OpenShift cluster detected, skipping service account creation"
+            )
             logger.debug("For OpenShift, please use: oc login <cluster-url>")
             return None
 
@@ -864,7 +898,10 @@ class KubeArchiveClient:
             # Check if kubectl is available
             logger.debug("Checking if kubectl is available...")
             result = subprocess.run(
-                ["kubectl", "version", "--client"], capture_output=True, timeout=5, text=True
+                ["kubectl", "version", "--client"],
+                capture_output=True,
+                timeout=5,
+                text=True,
             )
             if result.returncode != 0:
                 logger.debug(f"kubectl not available: {result.stderr}")
@@ -899,17 +936,28 @@ class KubeArchiveClient:
                     f"Running: kubectl create serviceaccount {sa_name} --namespace {sa_namespace}"
                 )
                 create_sa = subprocess.run(
-                    ["kubectl", "create", "serviceaccount", sa_name, "--namespace", sa_namespace],
+                    [
+                        "kubectl",
+                        "create",
+                        "serviceaccount",
+                        sa_name,
+                        "--namespace",
+                        sa_namespace,
+                    ],
                     capture_output=True,
                     timeout=10,
                     text=True,
                 )
 
                 if create_sa.returncode != 0:
-                    logger.warning(f"Failed to create service account: {create_sa.stderr}")
+                    logger.warning(
+                        f"Failed to create service account: {create_sa.stderr}"
+                    )
                     return None
                 else:
-                    logger.info(f"✓ Created service account {sa_name} in namespace {sa_namespace}")
+                    logger.info(
+                        f"✓ Created service account {sa_name} in namespace {sa_namespace}"
+                    )
             else:
                 logger.debug(
                     f"Service account {sa_name} already exists in namespace {sa_namespace}"
@@ -946,7 +994,9 @@ rules:
             # Write YAML to temp file and apply
             import tempfile
 
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".yaml", delete=False
+            ) as f:
                 f.write(clusterrole_yaml)
                 temp_file = f.name
 
@@ -960,7 +1010,10 @@ rules:
 
                 if create_clusterrole.returncode != 0:
                     error_msg = create_clusterrole.stderr
-                    if "forbidden" in error_msg.lower() or "unauthorized" in error_msg.lower():
+                    if (
+                        "forbidden" in error_msg.lower()
+                        or "unauthorized" in error_msg.lower()
+                    ):
                         logger.error(
                             "Insufficient permissions to create ClusterRole. You need cluster-admin privileges."
                         )
@@ -1003,14 +1056,19 @@ rules:
                 and "already exists" not in create_binding.stderr.lower()
             ):
                 error_msg = create_binding.stderr
-                if "forbidden" in error_msg.lower() or "unauthorized" in error_msg.lower():
+                if (
+                    "forbidden" in error_msg.lower()
+                    or "unauthorized" in error_msg.lower()
+                ):
                     logger.error(
                         "Insufficient permissions to create ClusterRoleBinding. You need cluster-admin privileges."
                     )
                     logger.error(
                         "Ask your cluster administrator to create the ClusterRoleBinding manually:"
                     )
-                    logger.error("  kubectl create clusterrolebinding kubearchive-client \\")
+                    logger.error(
+                        "  kubectl create clusterrolebinding kubearchive-client \\"
+                    )
                     logger.error(f"    --serviceaccount={sa_namespace}:{sa_name} \\")
                     logger.error("    --clusterrole=kubearchive-client")
                     return None
@@ -1110,14 +1168,18 @@ rules:
             parsed = urllib.parse.urlparse(endpoint)
             hostname = parsed.hostname or ""
             if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
-                logger.info(f"Connecting to localhost ({hostname}) - disabling SSL verification")
+                logger.info(
+                    f"Connecting to localhost ({hostname}) - disabling SSL verification"
+                )
                 self._ssl_context = False
                 return False
 
             # For OpenShift routes with public domains, use system CA bundle
             # These are typically signed by public CAs (Let's Encrypt, DigiCert, etc.)
             if ".apps." in hostname.lower() or hostname.endswith(".openshiftapps.com"):
-                logger.info(f"Detected OpenShift route with public certificate: {hostname}")
+                logger.info(
+                    f"Detected OpenShift route with public certificate: {hostname}"
+                )
                 logger.info("Using system CA bundle for SSL verification")
                 ssl_context = ssl.create_default_context()
                 self._ssl_context = ssl_context
@@ -1126,7 +1188,9 @@ rules:
         # Try to get CA certificate from TLS secrets for self-signed certificates
         if not self.k8s_core_api:
             logger.debug("CoreV1Api not available, cannot fetch CA certificate")
-            logger.warning("Falling back to insecure SSL (certificate verification disabled)")
+            logger.warning(
+                "Falling back to insecure SSL (certificate verification disabled)"
+            )
             self._ssl_context = False
             return False
 
@@ -1140,7 +1204,9 @@ rules:
                 hasattr(self.endpoint_discovery, "_discovered_namespace")
                 and self.endpoint_discovery._discovered_namespace
             ):
-                namespaces_to_search.append(self.endpoint_discovery._discovered_namespace)
+                namespaces_to_search.append(
+                    self.endpoint_discovery._discovered_namespace
+                )
 
             # Add common namespaces
             for ns in self._ca_namespaces:
@@ -1187,7 +1253,9 @@ rules:
                                     self._ca_cert_path = f.name
 
                             # Create SSL context with the CA certificate
-                            ssl_context = ssl.create_default_context(cafile=self._ca_cert_path)
+                            ssl_context = ssl.create_default_context(
+                                cafile=self._ca_cert_path
+                            )
 
                             # Check if we need to disable hostname verification
                             # This is needed when:
@@ -1198,7 +1266,9 @@ rules:
 
                             # Check for automatic port-forward
                             if (
-                                hasattr(self.endpoint_discovery, "_port_forward_process")
+                                hasattr(
+                                    self.endpoint_discovery, "_port_forward_process"
+                                )
                                 and self.endpoint_discovery._port_forward_process
                             ):
                                 disable_hostname_check = True
@@ -1206,15 +1276,23 @@ rules:
 
                             # Check if endpoint is localhost or 127.0.0.1
                             try:
-                                endpoint = await self.endpoint_discovery.discover_endpoint()
+                                endpoint = (
+                                    await self.endpoint_discovery.discover_endpoint()
+                                )
                                 if endpoint:
                                     import urllib.parse
 
                                     parsed = urllib.parse.urlparse(endpoint)
                                     hostname = parsed.hostname or ""
-                                    if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
+                                    if hostname.lower() in (
+                                        "localhost",
+                                        "127.0.0.1",
+                                        "::1",
+                                    ):
                                         disable_hostname_check = True
-                                        logger.debug(f"Detected localhost endpoint: {hostname}")
+                                        logger.debug(
+                                            f"Detected localhost endpoint: {hostname}"
+                                        )
                             except Exception:
                                 pass  # If we can't get endpoint, continue with current setting
 
@@ -1237,19 +1315,25 @@ rules:
                     except ApiException as e:
                         if e.status == 404:
                             continue  # Try next secret/namespace
-                        logger.debug(f"Error reading {secret_name} secret in {namespace}: {e}")
+                        logger.debug(
+                            f"Error reading {secret_name} secret in {namespace}: {e}"
+                        )
                         continue
 
             logger.warning(
                 f"TLS secrets not found. Searched for {self._ca_secret_names} in namespaces: {namespaces_to_search}"
             )
-            logger.warning("Falling back to insecure SSL (certificate verification disabled)")
+            logger.warning(
+                "Falling back to insecure SSL (certificate verification disabled)"
+            )
             self._ssl_context = False
             return False
 
         except Exception as e:
             logger.warning(f"Error creating SSL context from TLS secrets: {e}")
-            logger.warning("Falling back to insecure SSL (certificate verification disabled)")
+            logger.warning(
+                "Falling back to insecure SSL (certificate verification disabled)"
+            )
             self._ssl_context = False
             return False
 
@@ -1305,7 +1389,9 @@ rules:
             creation_timestamp_before=creation_timestamp_before,
             limit=limit,
             continue_token=continue_token,
-            name_query=name if name and "*" in name else None,  # Only use name in query if wildcard
+            name_query=name
+            if name and "*" in name
+            else None,  # Only use name in query if wildcard
         )
 
         # Get auth token
@@ -1337,7 +1423,9 @@ rules:
                         elif "text/plain" in content_type:
                             # Handle text/plain responses (empty results or error messages)
                             text = await response.text()
-                            logger.info(f"KubeArchive returned text/plain: {text[:200]}")
+                            logger.info(
+                                f"KubeArchive returned text/plain: {text[:200]}"
+                            )
 
                             # Try to parse as JSON anyway
                             try:
@@ -1346,7 +1434,9 @@ rules:
                                 data = json.loads(text)
                             except Exception:
                                 # If not JSON, treat as empty result
-                                logger.info("Text response is not JSON, treating as empty result")
+                                logger.info(
+                                    "Text response is not JSON, treating as empty result"
+                                )
                                 data = {
                                     "items": [],
                                     "kind": "List",
@@ -1364,7 +1454,11 @@ rules:
                                 )
                                 data = {"items": []}
 
-                        return {"status": "success", "data": data, "source": "kubearchive"}
+                        return {
+                            "status": "success",
+                            "data": data,
+                            "source": "kubearchive",
+                        }
                     elif response.status == 404:
                         return {
                             "status": "success",
@@ -1374,7 +1468,9 @@ rules:
                         }
                     else:
                         error_text = await response.text()
-                        logger.error(f"KubeArchive API error {response.status}: {error_text}")
+                        logger.error(
+                            f"KubeArchive API error {response.status}: {error_text}"
+                        )
                         return {
                             "status": "error",
                             "message": f"KubeArchive API returned status {response.status}: {error_text}",
@@ -1384,13 +1480,20 @@ rules:
             logger.error(f"Error connecting to KubeArchive API: {e}")
             # Clear cached endpoint on connection error
             self.endpoint_discovery.clear_cache()
-            return {"status": "error", "message": f"Error connecting to KubeArchive: {str(e)}"}
+            return {
+                "status": "error",
+                "message": f"Error connecting to KubeArchive: {str(e)}",
+            }
         except Exception as e:
             logger.error(f"Unexpected error querying KubeArchive: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
     async def get_resource_logs(
-        self, resource_type: str, namespace: str, name: str, container: Optional[str] = None
+        self,
+        resource_type: str,
+        namespace: str,
+        name: str,
+        container: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Retrieve container logs for an archived resource.
@@ -1454,7 +1557,11 @@ rules:
                         logger.info(
                             f"Successfully retrieved {len(logs) / 1.3} tokens of logs for {resource_type}/{name}"
                         )
-                        return {"status": "success", "logs": logs, "source": "kubearchive"}
+                        return {
+                            "status": "success",
+                            "logs": logs,
+                            "source": "kubearchive",
+                        }
                     elif response.status == 404:
                         logger.info(f"No logs found for {resource_type}/{name} (404)")
                         return {
@@ -1475,13 +1582,20 @@ rules:
 
         except aiohttp.ClientError as e:
             logger.error(f"Error retrieving logs from KubeArchive: {e}")
-            return {"status": "error", "message": f"Error connecting to KubeArchive: {str(e)}"}
+            return {
+                "status": "error",
+                "message": f"Error connecting to KubeArchive: {str(e)}",
+            }
         except Exception as e:
             logger.error(f"Unexpected error retrieving logs: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
     def _build_resource_url(
-        self, endpoint: str, resource_type: str, namespace: str, name: Optional[str] = None
+        self,
+        endpoint: str,
+        resource_type: str,
+        namespace: str,
+        name: Optional[str] = None,
     ) -> str:
         """Build KubeArchive API URL for resource queries."""
         # Map common resource types to their API paths
@@ -1520,7 +1634,9 @@ rules:
 
         return url
 
-    def _build_log_url(self, endpoint: str, resource_type: str, namespace: str, name: str) -> str:
+    def _build_log_url(
+        self, endpoint: str, resource_type: str, namespace: str, name: str
+    ) -> str:
         """
         Build KubeArchive API URL for log retrieval.
 
@@ -1672,7 +1788,9 @@ async def check_kubearchive_availability(
 
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"{endpoint}/livez", ssl=ssl_context, timeout=aiohttp.ClientTimeout(total=5)
+                f"{endpoint}/livez",
+                ssl=ssl_context,
+                timeout=aiohttp.ClientTimeout(total=5),
             ) as response:
                 if response.status == 200:
                     return {
@@ -1828,7 +1946,9 @@ def format_timestamp_for_kubearchive(dt: Union[datetime, str]) -> str:
             dt = dt.astimezone(timezone.utc)
         return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    raise ValueError(f"Invalid timestamp type: expected datetime or str, got {type(dt).__name__}")
+    raise ValueError(
+        f"Invalid timestamp type: expected datetime or str, got {type(dt).__name__}"
+    )
 
 
 async def query_kubearchive_resources(
@@ -1979,13 +2099,17 @@ async def query_kubearchive_resources(
                             else:
                                 formatted_resource["logs"] = logs_content
                         else:
-                            logger.info(f"No logs available for {resource_type}/{resource_name}")
+                            logger.info(
+                                f"No logs available for {resource_type}/{resource_name}"
+                            )
                             if output_format != "yaml":
                                 formatted_resource["logs"] = ""
                                 formatted_resource["logs_message"] = "No logs available"
                     else:
                         # Log fetch failed - include error message
-                        error_msg = logs_result.get("message", "Unknown error fetching logs")
+                        error_msg = logs_result.get(
+                            "message", "Unknown error fetching logs"
+                        )
                         logger.warning(
                             f"Failed to fetch logs for {resource_type}/{resource_name}: {error_msg}"
                         )
@@ -2015,7 +2139,9 @@ async def query_kubearchive_resources(
         }
 
 
-def _format_resource_summary(item: Dict[str, Any], resource_type: str) -> Dict[str, Any]:
+def _format_resource_summary(
+    item: Dict[str, Any], resource_type: str
+) -> Dict[str, Any]:
     """Format resource as summary (compact view)."""
     metadata = item.get("metadata", {})
     status = item.get("status", {})
@@ -2038,7 +2164,9 @@ def _format_resource_summary(item: Dict[str, Any], resource_type: str) -> Dict[s
     return summary
 
 
-def _format_resource_detailed(item: Dict[str, Any], resource_type: str) -> Dict[str, Any]:
+def _format_resource_detailed(
+    item: Dict[str, Any], resource_type: str
+) -> Dict[str, Any]:
     """Format resource with full details."""
     metadata = item.get("metadata", {})
     status = item.get("status", {})

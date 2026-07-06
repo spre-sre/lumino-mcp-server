@@ -33,7 +33,9 @@ def main():
 
     try:
         # Import the MCP server module (with hyphen in filename)
-        spec = importlib.util.spec_from_file_location("server_mcp", src_path / "server-mcp.py")
+        spec = importlib.util.spec_from_file_location(
+            "server_mcp", src_path / "server-mcp.py"
+        )
         server_mcp = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(server_mcp)
 
@@ -42,8 +44,12 @@ def main():
 
         # Check if running in Kubernetes (via environment variable)
         if os.getenv("KUBERNETES_NAMESPACE") or os.getenv("K8S_NAMESPACE"):
-            logger.info("Detected Kubernetes environment - running streamable HTTP server")
-            logger.info("Note: Server will bind to 127.0.0.1:8000 (limitation of MCP SDK 1.10.1)")
+            logger.info(
+                "Detected Kubernetes environment - running streamable HTTP server"
+            )
+            logger.info(
+                "Note: Server will bind to 127.0.0.1:8000 (limitation of MCP SDK 1.10.1)"
+            )
             logger.info("Using modified health checks to work with localhost binding")
 
             # Use the standard MCP run method with streamable-http transport

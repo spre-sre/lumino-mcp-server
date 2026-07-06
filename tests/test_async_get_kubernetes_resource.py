@@ -3,10 +3,10 @@ Tests for issue #131: Convert get_kubernetes_resource from sync def to async def
 
 These tests verify:
 - The function signature is async def (not def)
-- All 14 Kubernetes API call sites use await asyncio.to_thread(...)
+- Kubernetes API call sites use await asyncio.to_thread(...)
 - No direct (unwrapped) k8s API calls remain in the function body
 - The decorator, parameters, return type, and docstring are unchanged
-- Changes are confined to the function body (lines ~1097-1348)
+- Changes are confined to the function body of get_kubernetes_resource
 """
 
 import ast
@@ -17,6 +17,13 @@ import pytest
 # Path to the source file under test
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SERVER_FILE = os.path.join(REPO_ROOT, "src", "server-mcp.py")
+
+if not os.path.isfile(SERVER_FILE):
+    raise FileNotFoundError(
+        f"Source file not found at {SERVER_FILE}. "
+        f"If the test file was moved, update the REPO_ROOT derivation "
+        f"(currently expects tests/ to be one level below the repo root)."
+    )
 
 
 def _read_source():
@@ -94,21 +101,22 @@ class TestAsyncSignature:
 
 
 # ---------------------------------------------------------------------------
-# AC4: All 14 k8s API call sites use await asyncio.to_thread
+# AC4: k8s API call sites use await asyncio.to_thread
 # ---------------------------------------------------------------------------
 class TestAsyncioToThread:
     """AC4: Every k8s client API call inside get_kubernetes_resource uses
     await asyncio.to_thread(...)."""
 
-    def test_at_least_one_to_thread_call(self):
-        """There must be at least one 'await asyncio.to_thread(' in the function body."""
+    def test_at_least_ten_to_thread_calls(self):
+        """The function wraps ~14 k8s API calls via asyncio.to_thread;
+        require at least 10 to catch mass regressions while tolerating small refactors."""
         source = _read_source()
         start, end, func_lines = _extract_function_source_lines(source)
         assert func_lines, "Could not extract function source lines"
         func_text = "\n".join(func_lines)
         count = func_text.count("await asyncio.to_thread(")
-        assert count >= 1, (
-            "Expected at least 1 'await asyncio.to_thread(' call in function body, found 0"
+        assert count >= 10, (
+            f"Expected at least 10 'await asyncio.to_thread(' calls in function body, found {count}"
         )
 
     def test_no_direct_k8s_api_assignments(self):
@@ -119,11 +127,22 @@ class TestAsyncioToThread:
         assert func_lines, "Could not extract function source lines"
 
         k8s_api_objects = [
-            "k8s_core_api", "k8s_storage_api", "k8s_autoscaling_api",
-            "k8s_apps_api", "k8s_batch_api", "k8s_custom_api",
+            "k8s_core_api",
+            "k8s_storage_api",
+            "k8s_autoscaling_api",
+            "k8s_apps_api",
+            "k8s_batch_api",
+            "k8s_custom_api",
         ]
+        # Match direct k8s API method calls in any context — assignments,
+        # return statements, bare expressions, conditionals — not just after '='.
+        # Pattern 1: k8s_*_api.some_method(  — a k8s API object calling a method.
+        # Pattern 2: method(  — an indirect call via a getattr-obtained reference.
+        # Neither pattern false-positives on asyncio.to_thread(k8s_*_api.m, ...)
+        # because to_thread receives the callable *without* invoking it (no '(').
         k8s_api_pattern = re.compile(
-            r"=\s*(?:method|" + "|".join(k8s_api_objects) + r")\b.*\("
+            r"(?:" + "|".join(re.escape(o) for o in k8s_api_objects) + r")\.\w+\("
+            r"|\bmethod\("
         )
         direct_calls = []
         for i, line in enumerate(func_lines):
@@ -154,10 +173,18 @@ class TestSignaturePreserved:
         assert len(node.decorator_list) >= 1, "Function has no decorators"
         decorator = node.decorator_list[0]
         assert isinstance(decorator, ast.Call), "Decorator is not a call expression"
-        assert isinstance(decorator.func, ast.Attribute), "Decorator is not an attribute access"
-        assert decorator.func.attr == "tool", f"Decorator method is '{decorator.func.attr}', expected 'tool'"
-        assert isinstance(decorator.func.value, ast.Name), "Decorator object is not a simple name"
-        assert decorator.func.value.id == "mcp", f"Decorator object is '{decorator.func.value.id}', expected 'mcp'"
+        assert isinstance(decorator.func, ast.Attribute), (
+            "Decorator is not an attribute access"
+        )
+        assert decorator.func.attr == "tool", (
+            f"Decorator method is '{decorator.func.attr}', expected 'tool'"
+        )
+        assert isinstance(decorator.func.value, ast.Name), (
+            "Decorator object is not a simple name"
+        )
+        assert decorator.func.value.id == "mcp", (
+            f"Decorator object is '{decorator.func.value.id}', expected 'mcp'"
+        )
 
     def test_parameter_signature(self):
         """Parameters must be: resource_type: str, name: str,
@@ -197,8 +224,12 @@ class TestSignaturePreserved:
         node = _find_function_node(tree, "get_kubernetes_resource")
         assert node is not None, "Function not found"
         assert node.returns is not None, "No return type annotation"
-        assert isinstance(node.returns, ast.Name), "Return annotation is not a simple Name"
-        assert node.returns.id == "str", f"Return type is '{node.returns.id}', expected 'str'"
+        assert isinstance(node.returns, ast.Name), (
+            "Return annotation is not a simple Name"
+        )
+        assert node.returns.id == "str", (
+            f"Return type is '{node.returns.id}', expected 'str'"
+        )
 
     def test_docstring_present_and_unchanged(self):
         """The docstring must mention 'Retrieve details about a Kubernetes/Tekton resource.'"""

@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.geored/lumino",
   "title": "Lumino MCP Server",
-  "description": "AI-powered SRE observability for Kubernetes/OpenShift with 40+ Tekton debugging tools",
+  "description": "AI-powered SRE observability for Kubernetes/OpenShift with 39 specialized tools for monitoring, log analysis, and pipeline debugging",
   "version": "0.9.3",
   "websiteUrl": "https://github.com/spre-sre/lumino-mcp-server",
   "repository": {

@@ -29,7 +29,9 @@ except ImportError:
 logger = logging.getLogger("lumino-mcp")
 
 
-def calculate_duration(start_time, end_time, use_current_if_missing: bool = False) -> str:
+def calculate_duration(
+    start_time, end_time, use_current_if_missing: bool = False
+) -> str:
     """
     Calculate duration between two timestamps.
 
@@ -269,7 +271,9 @@ def _strip_none_values(obj):
     return obj
 
 
-def format_yaml_output(resource_obj: Any, resource_type: str, name: str, namespace: str) -> str:
+def format_yaml_output(
+    resource_obj: Any, resource_type: str, name: str, namespace: str
+) -> str:
     """Format resource as YAML output."""
     try:
         if hasattr(resource_obj, "to_dict"):
@@ -283,7 +287,9 @@ def format_yaml_output(resource_obj: Any, resource_type: str, name: str, namespa
         return f"Error formatting YAML: {str(e)}"
 
 
-def format_detailed_output(resource_obj: Any, resource_type: str, name: str, namespace: str) -> str:
+def format_detailed_output(
+    resource_obj: Any, resource_type: str, name: str, namespace: str
+) -> str:
     """Format resource with detailed information."""
     try:
         if hasattr(resource_obj, "to_dict"):
@@ -300,7 +306,9 @@ def format_detailed_output(resource_obj: Any, resource_type: str, name: str, nam
         if metadata:
             output.append("\n--- METADATA ---")
             output.append(f"UID: {metadata.get('uid', 'N/A')}")
-            output.append(f"Resource Version: {metadata.get('resource_version', 'N/A')}")
+            output.append(
+                f"Resource Version: {metadata.get('resource_version', 'N/A')}"
+            )
 
             # Creation timestamp
             created = metadata.get("creation_timestamp")
@@ -342,7 +350,9 @@ def format_detailed_output(resource_obj: Any, resource_type: str, name: str, nam
         return f"Error formatting detailed output: {str(e)}"
 
 
-def format_summary_output(resource_obj: Any, resource_type: str, name: str, namespace: str) -> str:
+def format_summary_output(
+    resource_obj: Any, resource_type: str, name: str, namespace: str
+) -> str:
     """Format resource with summary information."""
     try:
         if hasattr(resource_obj, "to_dict"):
@@ -430,7 +440,9 @@ def format_summary_output(resource_obj: Any, resource_type: str, name: str, name
                 output.append(
                     f"Memory: {allocatable.get('memory', '?')}/{capacity.get('memory', '?')}"
                 )
-                output.append(f"Pods: {allocatable.get('pods', '?')}/{capacity.get('pods', '?')}")
+                output.append(
+                    f"Pods: {allocatable.get('pods', '?')}/{capacity.get('pods', '?')}"
+                )
             node_info = status.get("node_info", {})
             if node_info:
                 output.append(f"Kubelet: {node_info.get('kubelet_version', 'unknown')}")
@@ -566,7 +578,9 @@ async def get_all_pod_logs(
                     f"Converted since_time '{since_time}' to since_seconds={computed_since_seconds}"
                 )
             except Exception as e:
-                logger.warning(f"Failed to parse since_time '{since_time}': {e}, ignoring filter")
+                logger.warning(
+                    f"Failed to parse since_time '{since_time}': {e}, ignoring filter"
+                )
         elif since_seconds:
             log_params["since_seconds"] = since_seconds
         elif tail_lines:
@@ -579,7 +593,9 @@ async def get_all_pod_logs(
                 log_params["container"] = container_name
 
                 # Read the logs for the specific container
-                logs = await asyncio.to_thread(k8s_core_api.read_namespaced_pod_log, **log_params)
+                logs = await asyncio.to_thread(
+                    k8s_core_api.read_namespaced_pod_log, **log_params
+                )
                 container_logs[container_name] = logs
             except Exception as e:
                 if hasattr(e, "reason"):
@@ -591,7 +607,9 @@ async def get_all_pod_logs(
                     logger.warning(
                         f"Unexpected error fetching logs for container {container_name} in pod {pod_name}: {e}"
                     )
-                    container_logs[container_name] = f"Unexpected error fetching logs: {str(e)}"
+                    container_logs[container_name] = (
+                        f"Unexpected error fetching logs: {str(e)}"
+                    )
 
     except Exception as e:
         if hasattr(e, "reason"):
@@ -638,7 +656,9 @@ def clean_pipeline_logs(raw_logs: str) -> str:
                 continue
 
             # Remove line continuation characters commonly found in pipeline logs
-            cleaned_line = re.sub(r"[│┌└├┤┐┘┬┴┼─═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬]", "", line)
+            cleaned_line = re.sub(
+                r"[│┌└├┤┐┘┬┴┼─═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬]", "", line
+            )
 
             # Remove leading/trailing whitespace
             cleaned_line = cleaned_line.strip()
@@ -673,7 +693,10 @@ def clean_pipeline_logs(raw_logs: str) -> str:
 
                         if isinstance(json_obj, dict):
                             # Check for Renovate/dependency bot logs
-                            if "name" in json_obj and json_obj.get("name") == "renovate":
+                            if (
+                                "name" in json_obj
+                                and json_obj.get("name") == "renovate"
+                            ):
                                 timestamp = json_obj.get("time", "")
                                 level = json_obj.get("level", "info")
                                 msg = json_obj.get("msg", "")
@@ -705,7 +728,10 @@ def clean_pipeline_logs(raw_logs: str) -> str:
                                     ):
                                         if isinstance(value, (str, int, float, bool)):
                                             formatted_parts.append(f"{key}={value}")
-                                        elif isinstance(value, dict) and len(str(value)) < 200:
+                                        elif (
+                                            isinstance(value, dict)
+                                            and len(str(value)) < 200
+                                        ):
                                             formatted_parts.append(
                                                 f"{key}={json.dumps(value, separators=(',', ':'))}"
                                             )
@@ -715,10 +741,14 @@ def clean_pipeline_logs(raw_logs: str) -> str:
                                 formatted_json = json.dumps(
                                     json_obj, indent=2, separators=(",", ": ")
                                 )
-                                formatted_line = f"{prefix} {formatted_json} {suffix}".strip()
+                                formatted_line = (
+                                    f"{prefix} {formatted_json} {suffix}".strip()
+                                )
                         else:
                             formatted_json = json.dumps(json_obj, separators=(",", ":"))
-                            formatted_line = f"{prefix} {formatted_json} {suffix}".strip()
+                            formatted_line = (
+                                f"{prefix} {formatted_json} {suffix}".strip()
+                            )
 
                         cleaned_lines.append(formatted_line)
 
@@ -820,7 +850,9 @@ def calculate_utilization(used: str, limit: str) -> float:
         return 0
 
 
-async def list_pods(namespace: str, k8s_core_api, log: logging.Logger) -> List[Dict[str, Any]]:
+async def list_pods(
+    namespace: str, k8s_core_api, log: logging.Logger
+) -> List[Dict[str, Any]]:
     """
     List pods in a specific namespace with relevant details.
 
@@ -850,13 +882,17 @@ async def list_pods(namespace: str, k8s_core_api, log: logging.Logger) -> List[D
 
                     if container.state.running:
                         container_status["state"] = "Running"
-                        container_status["started_at"] = container.state.running.started_at
+                        container_status["started_at"] = (
+                            container.state.running.started_at
+                        )
                     elif container.state.waiting:
                         container_status["state"] = "Waiting"
                         container_status["reason"] = container.state.waiting.reason
                     elif container.state.terminated:
                         container_status["state"] = "Terminated"
-                        container_status["exit_code"] = container.state.terminated.exit_code
+                        container_status["exit_code"] = (
+                            container.state.terminated.exit_code
+                        )
                         container_status["reason"] = container.state.terminated.reason
 
                     container_statuses.append(container_status)
@@ -867,7 +903,9 @@ async def list_pods(namespace: str, k8s_core_api, log: logging.Logger) -> List[D
                     "status": pod.status.phase,
                     "node": pod.spec.node_name if pod.spec.node_name else "Unknown",
                     "ip": pod.status.pod_ip if pod.status.pod_ip else "Unknown",
-                    "start_time": pod.status.start_time if pod.status.start_time else "Unknown",
+                    "start_time": pod.status.start_time
+                    if pod.status.start_time
+                    else "Unknown",
                     "containers": container_statuses,
                     "labels": pod.metadata.labels,
                 }
@@ -879,7 +917,9 @@ async def list_pods(namespace: str, k8s_core_api, log: logging.Logger) -> List[D
         return [{"error": str(e)}]
 
 
-def detect_anomalies_in_data(data_points: List[float], original_data: List[Any]) -> Dict[str, Any]:
+def detect_anomalies_in_data(
+    data_points: List[float], original_data: List[Any]
+) -> Dict[str, Any]:
     """
     Detect anomalies in numeric data using statistical methods (z-score).
 
@@ -927,7 +967,9 @@ def detect_anomalies_in_data(data_points: List[float], original_data: List[Any])
                         "index": i,
                         "value": value,
                         "z_score": z_score,
-                        "original_data": original_data[i] if i < len(original_data) else None,
+                        "original_data": original_data[i]
+                        if i < len(original_data)
+                        else None,
                     }
                 )
 
@@ -937,7 +979,11 @@ def detect_anomalies_in_data(data_points: List[float], original_data: List[Any])
                 "anomaly_details": {
                     "count": len(anomalies),
                     "anomalies": anomalies,
-                    "statistics": {"mean": mean_val, "std_dev": std_dev, "threshold": threshold},
+                    "statistics": {
+                        "mean": mean_val,
+                        "std_dev": std_dev,
+                        "threshold": threshold,
+                    },
                 },
                 "message": f"Found {len(anomalies)} anomalies using z-score analysis",
             }
@@ -1049,7 +1095,10 @@ def extract_error_patterns(log_text: str) -> List[str]:
     error_lines = []
     for line in log_text.split("\n"):
         line = line.strip()
-        if any(pattern.lower() in line.lower() for pattern in patterns) and len(line) > 10:
+        if (
+            any(pattern.lower() in line.lower() for pattern in patterns)
+            and len(line) > 10
+        ):
             # Limit to a reasonable length for readability
             if len(line) > 200:
                 line = line[:197] + "..."
@@ -1079,10 +1128,32 @@ def categorize_errors(log_text: str, error_patterns: List[str]) -> Dict[str, int
             "memory limit exceeded",
             "exceeded memory",
         ],
-        "crash": ["crashloopbackoff", "crash loop", "container crashed", "backoff restarting"],
-        "image": ["imagepullbackoff", "errimagepull", "image pull", "pull image", "registry"],
-        "scheduling": ["unschedulable", "failedscheduling", "insufficient", "node affinity"],
-        "storage": ["failedmount", "volume mount", "pvc", "persistent volume", "mount failed"],
+        "crash": [
+            "crashloopbackoff",
+            "crash loop",
+            "container crashed",
+            "backoff restarting",
+        ],
+        "image": [
+            "imagepullbackoff",
+            "errimagepull",
+            "image pull",
+            "pull image",
+            "registry",
+        ],
+        "scheduling": [
+            "unschedulable",
+            "failedscheduling",
+            "insufficient",
+            "node affinity",
+        ],
+        "storage": [
+            "failedmount",
+            "volume mount",
+            "pvc",
+            "persistent volume",
+            "mount failed",
+        ],
         "config": [
             "createcontainerconfigerror",
             "configmap",
@@ -1106,9 +1177,24 @@ def categorize_errors(log_text: str, error_patterns: List[str]) -> Dict[str, int
             "dns lookup",
             "dial tcp",
         ],
-        "permissions": ["access denied", "permission denied", "forbidden", "unauthorized", "rbac"],
-        "configuration": ["invalid configuration", "missing parameter", "environment variable"],
-        "dependency": ["not found", "missing dependency", "version mismatch", "incompatible"],
+        "permissions": [
+            "access denied",
+            "permission denied",
+            "forbidden",
+            "unauthorized",
+            "rbac",
+        ],
+        "configuration": [
+            "invalid configuration",
+            "missing parameter",
+            "environment variable",
+        ],
+        "dependency": [
+            "not found",
+            "missing dependency",
+            "version mismatch",
+            "incompatible",
+        ],
         "filesystem": [
             "no such file",
             "directory not found",
@@ -1269,14 +1355,10 @@ def determine_root_cause(analysis_results: Dict[str, Any]) -> str:
         elif category == "storage":
             return "Storage/volume issues - failed to mount volume or PVC problems"
         elif category == "config":
-            return (
-                "Container configuration error - missing ConfigMap, Secret, or environment variable"
-            )
+            return "Container configuration error - missing ConfigMap, Secret, or environment variable"
         # General categories
         elif category == "resource_limits":
-            return (
-                "Resource constraint issues - the pipeline is likely hitting memory or CPU limits"
-            )
+            return "Resource constraint issues - the pipeline is likely hitting memory or CPU limits"
         elif category == "network":
             return "Network connectivity issues - check network policies and external dependencies"
         elif category == "permissions":
@@ -1497,7 +1579,9 @@ def recommend_actions(analysis_results: Dict[str, Any]) -> List[str]:
     failed_tasks = analysis_results.get("failed_tasks", [])
     if failed_tasks:
         task_names = [task.get("task_name") for task in failed_tasks]
-        recommendations.append(f"Focus investigation on failed tasks: {', '.join(task_names)}")
+        recommendations.append(
+            f"Focus investigation on failed tasks: {', '.join(task_names)}"
+        )
 
     return recommendations
 
@@ -1567,7 +1651,9 @@ async def get_pipeline_details(
             pipeline_spec = spec.get("pipelineSpec", {})
             if pipeline_spec:
                 pipeline_name = (
-                    pipeline_spec.get("displayName") or pipeline_spec.get("name") or "unknown"
+                    pipeline_spec.get("displayName")
+                    or pipeline_spec.get("name")
+                    or "unknown"
                 )
 
         # Get all task runs for this pipeline
@@ -1616,7 +1702,11 @@ async def get_task_details(
     try:
         # Get the task run custom resource
         task_run_obj = k8s_custom_api.get_namespaced_custom_object(
-            group="tekton.dev", version="v1", namespace=namespace, plural="taskruns", name=task_run
+            group="tekton.dev",
+            version="v1",
+            namespace=namespace,
+            plural="taskruns",
+            name=task_run,
         )
 
         # Extract basic information
@@ -1629,7 +1719,9 @@ async def get_task_details(
 
         result = {
             "name": task_run,
-            "task": task_run_obj.get("spec", {}).get("taskRef", {}).get("name", "unknown"),
+            "task": task_run_obj.get("spec", {})
+            .get("taskRef", {})
+            .get("name", "unknown"),
             "status": condition.get("reason", "Unknown"),
             "message": condition.get("message", ""),
             "started_at": status.get("startTime", "unknown"),
@@ -1673,7 +1765,9 @@ async def get_task_details(
         return result
 
     except ApiException as e:
-        log.error(f"Error getting task details for {task_run} in namespace {namespace}: {e}")
+        log.error(
+            f"Error getting task details for {task_run} in namespace {namespace}: {e}"
+        )
         return {"error": str(e)}
 
 
@@ -1740,13 +1834,21 @@ def get_resource_api_info(resource_type: str) -> Optional[Dict[str, Any]]:
     resource_map = {
         # Core resources
         "pods": {"api": "core_v1", "method": "list_namespaced_pod", "namespaced": True},
-        "services": {"api": "core_v1", "method": "list_namespaced_service", "namespaced": True},
+        "services": {
+            "api": "core_v1",
+            "method": "list_namespaced_service",
+            "namespaced": True,
+        },
         "configmaps": {
             "api": "core_v1",
             "method": "list_namespaced_config_map",
             "namespaced": True,
         },
-        "secrets": {"api": "core_v1", "method": "list_namespaced_secret", "namespaced": True},
+        "secrets": {
+            "api": "core_v1",
+            "method": "list_namespaced_secret",
+            "namespaced": True,
+        },
         "persistentvolumeclaims": {
             "api": "core_v1",
             "method": "list_namespaced_persistent_volume_claim",
@@ -1758,7 +1860,11 @@ def get_resource_api_info(resource_type: str) -> Optional[Dict[str, Any]]:
             "namespaced": False,
         },
         "nodes": {"api": "core_v1", "method": "list_node", "namespaced": False},
-        "namespaces": {"api": "core_v1", "method": "list_namespace", "namespaced": False},
+        "namespaces": {
+            "api": "core_v1",
+            "method": "list_namespace",
+            "namespaced": False,
+        },
         # Apps resources
         "deployments": {
             "api": "apps_v1",
@@ -1781,8 +1887,16 @@ def get_resource_api_info(resource_type: str) -> Optional[Dict[str, Any]]:
             "namespaced": True,
         },
         # Batch resources
-        "jobs": {"api": "batch_v1", "method": "list_namespaced_job", "namespaced": True},
-        "cronjobs": {"api": "batch_v1", "method": "list_namespaced_cron_job", "namespaced": True},
+        "jobs": {
+            "api": "batch_v1",
+            "method": "list_namespaced_job",
+            "namespaced": True,
+        },
+        "cronjobs": {
+            "api": "batch_v1",
+            "method": "list_namespaced_cron_job",
+            "namespaced": True,
+        },
         # OpenShift specific resources (using custom API)
         "routes": {
             "api": "custom",
@@ -1890,7 +2004,10 @@ def get_resource_api_info(resource_type: str) -> Optional[Dict[str, Any]]:
 
 
 def extract_resource_info(
-    resource: Dict[str, Any], include_spec: bool, include_status: bool, resource_type_hint: str = ""
+    resource: Dict[str, Any],
+    include_spec: bool,
+    include_status: bool,
+    resource_type_hint: str = "",
 ) -> Dict[str, Any]:
     """
     Extract relevant information from a Kubernetes resource.
@@ -1963,17 +2080,27 @@ def extract_resource_info(
         or resource.get("api_version")
         or _type_to_api_version.get(resource_type_hint, "Unknown")
     )
-    creation_ts = metadata.get("creationTimestamp") or metadata.get("creation_timestamp") or ""
-    resource_version = metadata.get("resourceVersion") or metadata.get("resource_version") or ""
+    creation_ts = (
+        metadata.get("creationTimestamp") or metadata.get("creation_timestamp") or ""
+    )
+    resource_version = (
+        metadata.get("resourceVersion") or metadata.get("resource_version") or ""
+    )
 
-    kind = resource.get("kind") or _type_to_kind.get(resource_type_hint, "") or "Unknown"
+    kind = (
+        resource.get("kind") or _type_to_kind.get(resource_type_hint, "") or "Unknown"
+    )
     api_version = (
         resource.get("apiVersion")
         or resource.get("api_version")
         or _type_to_api_version.get(resource_type_hint, "Unknown")
     )
-    creation_ts = metadata.get("creationTimestamp") or metadata.get("creation_timestamp") or ""
-    resource_version = metadata.get("resourceVersion") or metadata.get("resource_version") or ""
+    creation_ts = (
+        metadata.get("creationTimestamp") or metadata.get("creation_timestamp") or ""
+    )
+    resource_version = (
+        metadata.get("resourceVersion") or metadata.get("resource_version") or ""
+    )
 
     resource_info = {
         "kind": kind,
@@ -2003,10 +2130,14 @@ def extract_resource_info(
             "available_replicas": status.get("availableReplicas"),
         }
         # Remove None values
-        resource_info["status"] = {k: v for k, v in processed_status.items() if v is not None}
+        resource_info["status"] = {
+            k: v for k, v in processed_status.items() if v is not None
+        }
 
     # Add owner references (handle both camelCase and snake_case)
-    owner_refs = metadata.get("ownerReferences") or metadata.get("owner_references") or []
+    owner_refs = (
+        metadata.get("ownerReferences") or metadata.get("owner_references") or []
+    )
     resource_info["owner_references"] = [
         {
             "kind": ref.get("kind", ""),
@@ -2050,7 +2181,9 @@ def analyze_labels(resources: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     for key, stats in label_stats.items():
         values_list = list(stats["values"])
-        common_labels.append({"key": key, "values": values_list, "frequency": stats["count"]})
+        common_labels.append(
+            {"key": key, "values": values_list, "frequency": stats["count"]}
+        )
 
         # Add unique labels (labels with only one unique value)
         if len(values_list) == 1:
@@ -2094,7 +2227,9 @@ def analyze_labels(resources: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def calculate_namespace_distribution(resources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def calculate_namespace_distribution(
+    resources: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """
     Calculate resource distribution across namespaces.
 
@@ -2148,11 +2283,15 @@ def sort_resources(
 
     if sort_by == "name":
         return sorted(
-            resources, key=lambda x: x.get("metadata", {}).get("name", ""), reverse=reverse
+            resources,
+            key=lambda x: x.get("metadata", {}).get("name", ""),
+            reverse=reverse,
         )
     elif sort_by == "namespace":
         return sorted(
-            resources, key=lambda x: x.get("metadata", {}).get("namespace", ""), reverse=reverse
+            resources,
+            key=lambda x: x.get("metadata", {}).get("namespace", ""),
+            reverse=reverse,
         )
     elif sort_by == "creation_time":
         return sorted(
@@ -2162,7 +2301,9 @@ def sort_resources(
         )
     elif sort_by == "labels":
         return sorted(
-            resources, key=lambda x: len(x.get("metadata", {}).get("labels", {})), reverse=reverse
+            resources,
+            key=lambda x: len(x.get("metadata", {}).get("labels", {})),
+            reverse=reverse,
         )
     else:
         return resources
@@ -2210,7 +2351,9 @@ def parse_certificate(cert_data: str) -> Optional[Dict[str, Any]]:
         # Get SAN extension
         san_list = []
         try:
-            san_ext = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+            san_ext = cert.extensions.get_extension_for_oid(
+                ExtensionOID.SUBJECT_ALTERNATIVE_NAME
+            )
             san_list = [name.value for name in san_ext.value]
         except x509.ExtensionNotFound:
             pass
@@ -2232,7 +2375,9 @@ def parse_certificate(cert_data: str) -> Optional[Dict[str, Any]]:
         # Extract is_ca from BasicConstraints extension
         is_ca = False
         try:
-            bc_ext = cert.extensions.get_extension_for_oid(ExtensionOID.BASIC_CONSTRAINTS)
+            bc_ext = cert.extensions.get_extension_for_oid(
+                ExtensionOID.BASIC_CONSTRAINTS
+            )
             is_ca = bc_ext.value.ca
         except (x509.ExtensionNotFound, AttributeError):
             pass
@@ -2321,7 +2466,9 @@ def detect_performance_trend(durations: List[float]) -> str:
 # ============================================================================
 
 
-def convert_to_graphviz(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> str:
+def convert_to_graphviz(
+    nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]
+) -> str:
     """Convert topology to Graphviz DOT format."""
     lines = ["digraph topology {"]
     lines.append("    rankdir=TB;")
@@ -2335,7 +2482,9 @@ def convert_to_graphviz(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]
     for edge in edges:
         source_id = hashlib.md5(edge["source"].encode()).hexdigest()[:8]
         target_id = hashlib.md5(edge["target"].encode()).hexdigest()[:8]
-        lines.append(f'    {source_id} -> {target_id} [label="{edge["relationship"]}"];')
+        lines.append(
+            f'    {source_id} -> {target_id} [label="{edge["relationship"]}"];'
+        )
 
     lines.append("}")
     return "\n".join(lines)
@@ -2478,11 +2627,17 @@ def calibrate_simulation_models(
             # Adjust resource consumption models
             if "resource_consumption" in calibrated:
                 # Use historical variance to adjust uncertainty
-                uncertainty_factor = cpu_stats.get("std_dev", 10) / cpu_stats.get("mean", 50)
-                calibrated["resource_consumption"]["uncertainty_factor"] = uncertainty_factor
-                calibrated["resource_consumption"]["historical_peak"] = cpu_stats.get("max", 80)
-                calibrated["resource_consumption"]["historical_baseline"] = cpu_stats.get(
-                    "mean", 45
+                uncertainty_factor = cpu_stats.get("std_dev", 10) / cpu_stats.get(
+                    "mean", 50
+                )
+                calibrated["resource_consumption"]["uncertainty_factor"] = (
+                    uncertainty_factor
+                )
+                calibrated["resource_consumption"]["historical_peak"] = cpu_stats.get(
+                    "max", 80
+                )
+                calibrated["resource_consumption"]["historical_baseline"] = (
+                    cpu_stats.get("mean", 45)
                 )
 
         # Adjust for load profile
@@ -2560,9 +2715,11 @@ async def run_monte_carlo_simulation(
 
     try:
         # Number of simulation runs based on risk tolerance
-        simulation_runs = {"conservative": 1000, "moderate": 500, "aggressive": 200}.get(
-            risk_tolerance, 500
-        )
+        simulation_runs = {
+            "conservative": 1000,
+            "moderate": 500,
+            "aggressive": 200,
+        }.get(risk_tolerance, 500)
 
         results = {
             "performance_impact": [],
@@ -2593,10 +2750,14 @@ async def run_monte_carlo_simulation(
             "configuration": {"perf": 0.1, "reliability": 0.15, "cost": 0.02},
             "deployment": {"perf": 0.08, "reliability": 0.12, "cost": 0.1},
         }
-        base = scenario_impacts.get(scenario_type, {"perf": 0.1, "reliability": 0.05, "cost": 0.2})
+        base = scenario_impacts.get(
+            scenario_type, {"perf": 0.1, "reliability": 0.05, "cost": 0.2}
+        )
 
         # Determine uncertainty factor once (outside the loop for consistency)
-        raw_uncertainty = models.get("resource_consumption", {}).get("uncertainty_factor", 0.1)
+        raw_uncertainty = models.get("resource_consumption", {}).get(
+            "uncertainty_factor", 0.1
+        )
         # Ensure minimum uncertainty so Monte Carlo produces meaningful variance
         uncertainty_factor = max(raw_uncertainty, 0.05)
 
@@ -2706,7 +2867,9 @@ async def collect_baseline_system_data(
                 baseline["resource_usage"][namespace] = namespace_resources
 
             except Exception as e:
-                logger.warning(f"Error collecting baseline data for namespace {namespace}: {e}")
+                logger.warning(
+                    f"Error collecting baseline data for namespace {namespace}: {e}"
+                )
 
         # Get cluster-level metrics
         try:
@@ -2715,8 +2878,12 @@ async def collect_baseline_system_data(
             for node in nodes.items:
                 node_info = {
                     "name": node.metadata.name,
-                    "capacity": dict(node.status.capacity) if node.status.capacity else {},
-                    "allocatable": dict(node.status.allocatable) if node.status.allocatable else {},
+                    "capacity": dict(node.status.capacity)
+                    if node.status.capacity
+                    else {},
+                    "allocatable": dict(node.status.allocatable)
+                    if node.status.allocatable
+                    else {},
                     "conditions": [],
                 }
 
@@ -2851,10 +3018,14 @@ async def load_historical_performance_data(
 
         # If no Prometheus function provided, fall back to synthetic data
         if prometheus_query_fn is None:
-            logger.warning("No Prometheus query function provided, using synthetic data")
+            logger.warning(
+                "No Prometheus query function provided, using synthetic data"
+            )
             return await _generate_synthetic_historical_data(duration_hours)
 
-        logger.info(f"Loading historical performance data from Prometheus for {duration_str}")
+        logger.info(
+            f"Loading historical performance data from Prometheus for {duration_str}"
+        )
 
         # Query 1: CPU utilization over time (hourly averages)
         # Using node-level CPU as percentage
@@ -2940,7 +3111,9 @@ async def load_historical_performance_data(
                 if len(value) > 1 and value[1]:
                     try:
                         dur_val = float(value[1])
-                        if dur_val > 0 and not (dur_val != dur_val):  # Valid and not NaN
+                        if dur_val > 0 and not (
+                            dur_val != dur_val
+                        ):  # Valid and not NaN
                             historical["response_times"].append(dur_val)
                             historical["pipeline_durations"].append(dur_val)
                     except (ValueError, TypeError):
@@ -2954,7 +3127,9 @@ async def load_historical_performance_data(
                 historical["throughput"],
             ]
         ):
-            logger.warning("Primary Prometheus queries returned no data, trying alternate queries")
+            logger.warning(
+                "Primary Prometheus queries returned no data, trying alternate queries"
+            )
 
             # Try container-level CPU usage
             alt_cpu_query = """
@@ -2990,7 +3165,9 @@ async def load_historical_performance_data(
                 sum(increase(tekton_pipelines_controller_taskrun_count[1h]))
             """
             alt_throughput_result = await prometheus_query_fn(alt_throughput_query)
-            if alt_throughput_result.get("success") and alt_throughput_result.get("data"):
+            if alt_throughput_result.get("success") and alt_throughput_result.get(
+                "data"
+            ):
                 for result in alt_throughput_result["data"]:
                     value = result.get("value", [None, None])
                     if len(value) > 1 and value[1]:
@@ -3009,9 +3186,13 @@ async def load_historical_performance_data(
         logger.info(f"Historical data collected: {data_summary}")
 
         # If still no data, generate synthetic as fallback but mark it
-        total_data_points = sum(len(v) for v in historical.values() if isinstance(v, list))
+        total_data_points = sum(
+            len(v) for v in historical.values() if isinstance(v, list)
+        )
         if total_data_points == 0:
-            logger.warning("No Prometheus data available, falling back to synthetic data")
+            logger.warning(
+                "No Prometheus data available, falling back to synthetic data"
+            )
             synthetic = await _generate_synthetic_historical_data(duration_hours)
             synthetic["data_source"] = "synthetic_fallback"
             synthetic["prometheus_queries_attempted"] = True

@@ -45,7 +45,16 @@ SMART_EVENTS_CONFIG: Dict[str, Any] = {
             "refused",
             "invalid",
         ],
-        "MEDIUM": ["warning", "warn", "retry", "slow", "degraded", "pending", "waiting", "delayed"],
+        "MEDIUM": [
+            "warning",
+            "warn",
+            "retry",
+            "slow",
+            "degraded",
+            "pending",
+            "waiting",
+            "delayed",
+        ],
         "LOW": [
             "info",
             "created",

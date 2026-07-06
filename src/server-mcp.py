@@ -359,7 +359,9 @@ class PrometheusEndpointCache:
     """Cache for discovered Prometheus/Thanos endpoints with TTL."""
 
     def __init__(self, ttl_seconds: int = 300):  # 5 minute default cache
-        self._cache: Dict[str, tuple] = {}  # key -> (endpoint, endpoint_type, timestamp)
+        self._cache: Dict[
+            str, tuple
+        ] = {}  # key -> (endpoint, endpoint_type, timestamp)
         self._ttl = ttl_seconds
 
     def get(self, cluster_key: str = "default") -> Optional[tuple]:
@@ -374,7 +376,10 @@ class PrometheusEndpointCache:
         return None
 
     def set(
-        self, endpoint: str, cluster_key: str = "default", endpoint_type: str = "prometheus"
+        self,
+        endpoint: str,
+        cluster_key: str = "default",
+        endpoint_type: str = "prometheus",
     ) -> None:
         """Cache endpoint with its type."""
         self._cache[cluster_key] = (endpoint, endpoint_type, time.time())
@@ -468,7 +473,9 @@ async def _estimate_pod_log_tokens(
             # Extrapolate to full tail_lines with capped multiplier to avoid over-estimation
             # Cap at 3x to handle cases where sample has unusually high token density
             raw_factor = tail_lines / sample_lines
-            extrapolation_factor = min(raw_factor * 1.1, 3.0)  # Cap at 3x, use 1.1x safety margin
+            extrapolation_factor = min(
+                raw_factor * 1.1, 3.0
+            )  # Cap at 3x, use 1.1x safety margin
             estimated_tokens = int(sample_tokens * extrapolation_factor)
 
             logger.debug(
@@ -499,7 +506,11 @@ async def _prioritize_pipeline_pods(pod_names: List[str], namespace: str) -> Lis
 
         for pod_name in pod_names:
             try:
-                pod = k8s_core_api.read_namespaced_pod(name=pod_name, namespace=namespace)
+                pod = await asyncio.to_thread(
+                    k8s_core_api.read_namespaced_pod,
+                    name=pod_name,
+                    namespace=namespace,
+                )
 
                 priority_score = 0
 
@@ -518,7 +529,10 @@ async def _prioritize_pipeline_pods(pod_names: List[str], namespace: str) -> Lis
                 # Pods with restart counts (indicating issues) get priority
                 if pod.status.container_statuses:
                     for container_status in pod.status.container_statuses:
-                        if container_status.restart_count and container_status.restart_count > 0:
+                        if (
+                            container_status.restart_count
+                            and container_status.restart_count > 0
+                        ):
                             priority_score += 50 + container_status.restart_count * 10
 
                 pod_priorities.append((pod_name, priority_score))
@@ -576,7 +590,9 @@ def _calculate_adaptive_tail_lines(
     return adaptive_lines
 
 
-def _truncate_logs_to_token_limit(logs: str, max_tokens: int, pod_name: str) -> tuple[str, bool]:
+def _truncate_logs_to_token_limit(
+    logs: str, max_tokens: int, pod_name: str
+) -> tuple[str, bool]:
     """
     Truncate logs if they exceed the token limit.
 
@@ -606,7 +622,9 @@ def _truncate_logs_to_token_limit(logs: str, max_tokens: int, pod_name: str) -> 
     truncation_notice = f"\n\n[... TRUNCATED: {current_tokens:,} tokens exceeded budget of {max_tokens:,} tokens for pod {pod_name} ...]"
     truncated += truncation_notice
 
-    logger.warning(f"Truncated logs for {pod_name}: {current_tokens:,} -> ~{max_tokens:,} tokens")
+    logger.warning(
+        f"Truncated logs for {pod_name}: {current_tokens:,} -> ~{max_tokens:,} tokens"
+    )
     return truncated, True
 
 
@@ -641,9 +659,13 @@ async def list_namespaces() -> List[str]:
 
         try:
             logger.info("Retrieving all namespaces from Kubernetes cluster")
-            namespaces = k8s_core_api.list_namespace()
+            namespaces = await asyncio.to_thread(k8s_core_api.list_namespace)
             ns_names = sorted(
-                [ns.metadata.name for ns in namespaces.items if ns.metadata and ns.metadata.name]
+                [
+                    ns.metadata.name
+                    for ns in namespaces.items
+                    if ns.metadata and ns.metadata.name
+                ]
             )
 
             _namespace_cache["namespaces"] = ns_names
@@ -662,11 +684,15 @@ async def list_namespaces() -> List[str]:
                     f"Authentication failed while listing namespaces: {e.reason}. Check kubeconfig."
                 )
             else:
-                logger.error(f"API error while listing namespaces: {e.status} - {e.reason}")
+                logger.error(
+                    f"API error while listing namespaces: {e.status} - {e.reason}"
+                )
             return []
 
         except Exception as e:
-            logger.error(f"Unexpected error while listing namespaces: {str(e)}", exc_info=True)
+            logger.error(
+                f"Unexpected error while listing namespaces: {str(e)}", exc_info=True
+            )
             return []
 
 
@@ -698,7 +724,9 @@ async def detect_tekton_namespaces() -> Dict[str, List[str]]:
         all_namespaces = await list_namespaces()
 
         if not all_namespaces:
-            logger.warning("No namespaces retrieved from cluster - returning empty classification")
+            logger.warning(
+                "No namespaces retrieved from cluster - returning empty classification"
+            )
             return {
                 "core_tekton": [],
                 "tekton_related": [],
@@ -788,7 +816,10 @@ async def detect_tekton_namespaces() -> Dict[str, List[str]]:
         return result
 
     except Exception as e:
-        logger.error(f"Unexpected error during Tekton namespace detection: {str(e)}", exc_info=True)
+        logger.error(
+            f"Unexpected error during Tekton namespace detection: {str(e)}",
+            exc_info=True,
+        )
         # Return empty but consistent structure on error
         return {
             "core_tekton": [],
@@ -800,7 +831,9 @@ async def detect_tekton_namespaces() -> Dict[str, List[str]]:
 
 
 @mcp.tool()
-async def list_pipelineruns(namespace: str, limit: Optional[int] = 200) -> List[Dict[str, Any]]:
+async def list_pipelineruns(
+    namespace: str, limit: Optional[int] = 200
+) -> List[Dict[str, Any]]:
     """
     List Tekton PipelineRuns in a namespace with status and timing details.
 
@@ -817,7 +850,9 @@ async def list_pipelineruns(namespace: str, limit: Optional[int] = 200) -> List[
 
         # Validate namespace parameter
         if not namespace or not isinstance(namespace, str):
-            error_msg = f"Invalid namespace parameter: {namespace}. Must be a non-empty string."
+            error_msg = (
+                f"Invalid namespace parameter: {namespace}. Must be a non-empty string."
+            )
             logger.error(error_msg)
             return [{"error": error_msg}]
 
@@ -831,10 +866,14 @@ async def list_pipelineruns(namespace: str, limit: Optional[int] = 200) -> List[
         if limit:
             list_kwargs["limit"] = limit
 
-        pipeline_runs = k8s_custom_api.list_namespaced_custom_object(**list_kwargs)
+        pipeline_runs = await asyncio.to_thread(
+            lambda: k8s_custom_api.list_namespaced_custom_object(**list_kwargs)
+        )
 
         pipeline_run_items = pipeline_runs.get("items", [])
-        logger.info(f"Found {len(pipeline_run_items)} PipelineRuns in namespace '{namespace}'")
+        logger.info(
+            f"Found {len(pipeline_run_items)} PipelineRuns in namespace '{namespace}'"
+        )
 
         if not pipeline_run_items:
             logger.info(f"No PipelineRuns found in namespace '{namespace}'")
@@ -947,7 +986,9 @@ async def list_pipelineruns(namespace: str, limit: Optional[int] = 200) -> List[
 
     except ApiException as e:
         if e.status == 404:
-            logger.warning(f"Namespace '{namespace}' not found or no PipelineRuns accessible")
+            logger.warning(
+                f"Namespace '{namespace}' not found or no PipelineRuns accessible"
+            )
             return []
         elif e.status == 403:
             error_msg = (
@@ -957,9 +998,7 @@ async def list_pipelineruns(namespace: str, limit: Optional[int] = 200) -> List[
             logger.error(error_msg)
             return [{"error": error_msg}]
         elif e.status == 401:
-            error_msg = (
-                f"Authentication failed while accessing namespace '{namespace}'. Check kubeconfig."
-            )
+            error_msg = f"Authentication failed while accessing namespace '{namespace}'. Check kubeconfig."
             logger.error(error_msg)
             return [{"error": error_msg}]
         else:
@@ -974,7 +1013,9 @@ async def list_pipelineruns(namespace: str, limit: Optional[int] = 200) -> List[
 
 
 @mcp.tool()
-async def list_taskruns(namespace: str, pipeline_run: Optional[str] = None) -> List[Dict[str, Any]]:
+async def list_taskruns(
+    namespace: str, pipeline_run: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """
     List Tekton TaskRuns in a namespace, optionally filtered by a specific PipelineRun.
 
@@ -991,7 +1032,9 @@ async def list_taskruns(namespace: str, pipeline_run: Optional[str] = None) -> L
             + (f" (filtered by PipelineRun: {pipeline_run})" if pipeline_run else "")
         )
 
-        label_selector = f"tekton.dev/pipelineRun={pipeline_run}" if pipeline_run else None
+        label_selector = (
+            f"tekton.dev/pipelineRun={pipeline_run}" if pipeline_run else None
+        )
 
         # When filtering by pipeline_run, the label_selector narrows the result set
         # so no limit is needed. Without a filter, limit to prevent fetching all
@@ -1007,14 +1050,18 @@ async def list_taskruns(namespace: str, pipeline_run: Optional[str] = None) -> L
         else:
             list_kwargs["limit"] = 200
 
-        task_runs = k8s_custom_api.list_namespaced_custom_object(**list_kwargs)
+        task_runs = await asyncio.to_thread(
+            lambda: k8s_custom_api.list_namespaced_custom_object(**list_kwargs)
+        )
 
         result = []
         for tr in task_runs.get("items", []):
             # Skip if filtering by pipeline_run and this task doesn't match
             if (
                 pipeline_run
-                and tr.get("metadata", {}).get("labels", {}).get("tekton.dev/pipelineRun")
+                and tr.get("metadata", {})
+                .get("labels", {})
+                .get("tekton.dev/pipelineRun")
                 != pipeline_run
             ):
                 continue
@@ -1025,10 +1072,17 @@ async def list_taskruns(namespace: str, pipeline_run: Optional[str] = None) -> L
             labels = metadata.get("labels", {})
 
             conditions = status.get("conditions", [])
-            current_status = conditions[0].get("reason", "Unknown") if conditions else "Unknown"
+            current_status = (
+                conditions[0].get("reason", "Unknown") if conditions else "Unknown"
+            )
 
             # Determine if task is still running
-            is_running = current_status in ("Running", "Started", "Pending", "TaskRunPending")
+            is_running = current_status in (
+                "Running",
+                "Started",
+                "Pending",
+                "TaskRunPending",
+            )
 
             start_time = status.get("startTime")
             completion_time = status.get("completionTime")
@@ -1140,7 +1194,9 @@ async def list_pods_in_namespace(namespace: str) -> List[Dict[str, Any]]:
                             and ics.state.terminated.reason
                             and ics.state.terminated.reason != "Completed"
                         ):
-                            container_states.append(f"Init:{ics.state.terminated.reason}")
+                            container_states.append(
+                                f"Init:{ics.state.terminated.reason}"
+                            )
 
             pods_info.append(
                 {
@@ -1162,14 +1218,18 @@ async def list_pods_in_namespace(namespace: str) -> List[Dict[str, Any]]:
         return [{"error": f"API Error: {e.reason}", "namespace": namespace}]
     except Exception as e:
         logger.error(
-            f"Unexpected error listing pods in namespace '{namespace}': {e}", exc_info=True
+            f"Unexpected error listing pods in namespace '{namespace}': {e}",
+            exc_info=True,
         )
         return [{"error": f"Unexpected Error: {str(e)}", "namespace": namespace}]
 
 
 @mcp.tool()
 async def get_kubernetes_resource(
-    resource_type: str, name: str, namespace: str = "default", output_format: str = "summary"
+    resource_type: str,
+    name: str,
+    namespace: str = "default",
+    output_format: str = "summary",
 ) -> str:
     """
     Retrieve details about a Kubernetes/Tekton resource.
@@ -1220,7 +1280,10 @@ async def get_kubernetes_resource(
             "statefulset": ("stateful_sets", "apps/v1"),
         }
 
-        batch_resources = {"job": ("jobs", "batch/v1"), "cronjob": ("cron_jobs", "batch/v1")}
+        batch_resources = {
+            "job": ("jobs", "batch/v1"),
+            "cronjob": ("cron_jobs", "batch/v1"),
+        }
 
         networking_resources = {"ingress": ("ingresses", "networking.k8s.io/v1")}
 
@@ -1275,8 +1338,14 @@ async def get_kubernetes_resource(
             "snapshot": ("snapshots", "appstudio.redhat.com/v1alpha1"),
             "release": ("releases", "appstudio.redhat.com/v1alpha1"),
             "releaseplan": ("releaseplans", "appstudio.redhat.com/v1alpha1"),
-            "releaseplanadmission": ("releaseplanadmissions", "appstudio.redhat.com/v1alpha1"),
-            "integrationtestscenario": ("integrationtestscenarios", "appstudio.redhat.com/v1beta2"),
+            "releaseplanadmission": (
+                "releaseplanadmissions",
+                "appstudio.redhat.com/v1alpha1",
+            ),
+            "integrationtestscenario": (
+                "integrationtestscenarios",
+                "appstudio.redhat.com/v1beta2",
+            ),
         }
 
         resource_obj = None
@@ -1292,31 +1361,44 @@ async def get_kubernetes_resource(
             elif resource_type == "endpoints":
                 # Endpoints uses plural form in method name
                 resource_obj = await asyncio.to_thread(
-                    k8s_core_api.read_namespaced_endpoints, name=name, namespace=namespace
+                    k8s_core_api.read_namespaced_endpoints,
+                    name=name,
+                    namespace=namespace,
                 )
             else:
                 # Namespaced resources
                 method = getattr(k8s_core_api, f"read_namespaced_{method_name[:-1]}")
-                resource_obj = await asyncio.to_thread(method, name=name, namespace=namespace)
+                resource_obj = await asyncio.to_thread(
+                    method, name=name, namespace=namespace
+                )
 
         elif resource_type in storage_resources:
             # Cluster-scoped storage resources
-            resource_obj = await asyncio.to_thread(k8s_storage_api.read_storage_class, name=name)
+            method_name, api_version = storage_resources[resource_type]
+            resource_obj = await asyncio.to_thread(
+                k8s_storage_api.read_storage_class, name=name
+            )
 
         elif resource_type in autoscaling_resources:
             method_name, api_version = autoscaling_resources[resource_type]
             method = getattr(k8s_autoscaling_api, f"read_namespaced_{method_name[:-1]}")
-            resource_obj = await asyncio.to_thread(method, name=name, namespace=namespace)
+            resource_obj = await asyncio.to_thread(
+                method, name=name, namespace=namespace
+            )
 
         elif resource_type in apps_resources:
             method_name, api_version = apps_resources[resource_type]
             method = getattr(k8s_apps_api, f"read_namespaced_{method_name[:-1]}")
-            resource_obj = await asyncio.to_thread(method, name=name, namespace=namespace)
+            resource_obj = await asyncio.to_thread(
+                method, name=name, namespace=namespace
+            )
 
         elif resource_type in batch_resources:
-            method_name, _ = batch_resources[resource_type]
+            method_name, api_version = batch_resources[resource_type]
             method = getattr(k8s_batch_api, f"read_namespaced_{method_name[:-1]}")
-            resource_obj = await asyncio.to_thread(method, name=name, namespace=namespace)
+            resource_obj = await asyncio.to_thread(
+                method, name=name, namespace=namespace
+            )
 
         elif resource_type in networking_resources:
             method_name, api_version = networking_resources[resource_type]
@@ -1545,7 +1627,9 @@ async def get_pipelinerun_logs(
                 # STEP 3: Check if we can process this pod within budget
                 # GUARANTEE: Always process at least the first pod (highest priority - usually failed)
                 is_first_pod = processed_pods == 0
-                if not is_first_pod and not processor.can_process_more(estimated_tokens):
+                if not is_first_pod and not processor.can_process_more(
+                    estimated_tokens
+                ):
                     logger.info(
                         f"Token budget reached ({processor.get_usage_percentage():.1f}% used) - processed {processed_pods}/{len(pod_names)} pods"
                     )
@@ -1573,9 +1657,13 @@ async def get_pipelinerun_logs(
                         for container_name, logs in pod_logs.items():
                             if clean_logs:
                                 logs = clean_pipeline_logs(logs)
-                            formatted_logs.append(f"--- Container: {container_name} ---")
+                            formatted_logs.append(
+                                f"--- Container: {container_name} ---"
+                            )
                             formatted_logs.append(logs)
-                            formatted_logs.append(f"--- End Container: {container_name} ---")
+                            formatted_logs.append(
+                                f"--- End Container: {container_name} ---"
+                            )
                         all_logs[pod_name] = "\n".join(formatted_logs)
 
                     # HARD LIMIT ENFORCEMENT: Truncate if actual tokens exceed remaining budget
@@ -1584,12 +1672,16 @@ async def get_pipelinerun_logs(
 
                     if actual_tokens > remaining_budget:
                         # Truncate logs to fit within remaining budget
-                        all_logs[pod_name], was_truncated = _truncate_logs_to_token_limit(
-                            all_logs[pod_name], remaining_budget, pod_name
+                        all_logs[pod_name], was_truncated = (
+                            _truncate_logs_to_token_limit(
+                                all_logs[pod_name], remaining_budget, pod_name
+                            )
                         )
                         if was_truncated:
                             truncated_pods += 1
-                        actual_tokens = calculate_context_tokens(str(all_logs[pod_name]))
+                        actual_tokens = calculate_context_tokens(
+                            str(all_logs[pod_name])
+                        )
 
                     processor.record_usage(actual_tokens)
                     processed_pods += 1
@@ -1603,7 +1695,9 @@ async def get_pipelinerun_logs(
 
                 except Exception as e:
                     logger.error(f"Error fetching logs for pod {pod_name}: {e}")
-                    all_logs[pod_name] = f"Error fetching logs for pod {pod_name}: {str(e)}"
+                    all_logs[pod_name] = (
+                        f"Error fetching logs for pod {pod_name}: {str(e)}"
+                    )
 
             # Add adaptive processing metadata
             all_logs["_metadata"] = {
@@ -1649,9 +1743,13 @@ async def get_pipelinerun_logs(
                         for container_name, logs in pod_logs.items():
                             if clean_logs:
                                 logs = clean_pipeline_logs(logs)
-                            formatted_logs.append(f"--- Container: {container_name} ---")
+                            formatted_logs.append(
+                                f"--- Container: {container_name} ---"
+                            )
                             formatted_logs.append(logs)
-                            formatted_logs.append(f"--- End Container: {container_name} ---")
+                            formatted_logs.append(
+                                f"--- End Container: {container_name} ---"
+                            )
                         return pod_name, "\n".join(formatted_logs)
                 except Exception as e:
                     logger.error(f"Error fetching logs for pod {pod_name}: {e}")
@@ -1698,7 +1796,9 @@ async def get_pipelinerun_logs(
         logger.error(f"Connection error: {e}")
         return {"error": str(e)}
     except ApiException as e:
-        logger.error(f"K8s API error getting PipelineRun pods: {e.status} - {e.reason} - {e.body}")
+        logger.error(
+            f"K8s API error getting PipelineRun pods: {e.status} - {e.reason} - {e.body}"
+        )
         return {"error": f"Failed to find pods for PipelineRun: {e.reason}"}
     except Exception as e:
         logger.error(f"Unexpected error getting PipelineRun logs: {e}", exc_info=True)
@@ -1726,7 +1826,9 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
         pods = await list_pods(namespace, k8s_core_api, logger)
 
         # Get resource quotas
-        resource_quotas = k8s_core_api.list_namespaced_resource_quota(namespace)
+        resource_quotas = await asyncio.to_thread(
+            k8s_core_api.list_namespaced_resource_quota, namespace
+        )
 
         # Check for resource problems in pod status
         resource_issues = []
@@ -1739,7 +1841,11 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
 
             # Fetch detailed pod info once per pod that needs inspection
             if pod_status in ["Failed", "Pending", "Running"]:
-                detailed_pod = k8s_core_api.read_namespaced_pod(name=pod_name, namespace=namespace)
+                detailed_pod = await asyncio.to_thread(
+                    k8s_core_api.read_namespaced_pod,
+                    name=pod_name,
+                    namespace=namespace,
+                )
 
                 # Check for pending pods (potential scheduling issues)
                 if (
@@ -1748,7 +1854,10 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
                     and detailed_pod.status.conditions
                 ):
                     for condition in detailed_pod.status.conditions:
-                        if condition.type == "PodScheduled" and condition.status == "False":
+                        if (
+                            condition.type == "PodScheduled"
+                            and condition.status == "False"
+                        ):
                             pending_pods.append(
                                 {
                                     "pod": pod_name,
@@ -1783,10 +1892,15 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
                         return
                     for container_status in statuses:
                         cname = (
-                            f"{prefix}{container_status.name}" if prefix else container_status.name
+                            f"{prefix}{container_status.name}"
+                            if prefix
+                            else container_status.name
                         )
                         # Check current state for waiting issues
-                        if hasattr(container_status, "state") and container_status.state:
+                        if (
+                            hasattr(container_status, "state")
+                            and container_status.state
+                        ):
                             if container_status.state.waiting:
                                 reason = container_status.state.waiting.reason
                                 if reason in [
@@ -1803,14 +1917,21 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
                                             "pod": pod_name,
                                             "container": cname,
                                             "issue": reason,
-                                            "message": container_status.state.waiting.message or "",
+                                            "message": container_status.state.waiting.message
+                                            or "",
                                         }
                                     )
 
                         # Check last_state for OOMKilled (container restarted after OOM)
-                        if hasattr(container_status, "last_state") and container_status.last_state:
+                        if (
+                            hasattr(container_status, "last_state")
+                            and container_status.last_state
+                        ):
                             if container_status.last_state.terminated:
-                                if container_status.last_state.terminated.reason == "OOMKilled":
+                                if (
+                                    container_status.last_state.terminated.reason
+                                    == "OOMKilled"
+                                ):
                                     oom_killed_pods.append(
                                         {
                                             "pod": pod_name,
@@ -1822,7 +1943,10 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
                                     )
 
                         # Check for high restart counts (potential resource issues)
-                        if container_status.restart_count and container_status.restart_count > 5:
+                        if (
+                            container_status.restart_count
+                            and container_status.restart_count > 5
+                        ):
                             resource_issues.append(
                                 {
                                     "pod": pod_name,
@@ -1880,7 +2004,9 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
             summary_parts.append(f"{len(resource_issues)} container issues")
         if high_utilization:
             status = "Warning" if status == "Healthy" else status
-            summary_parts.append(f"{len(high_utilization)} quotas with high utilization")
+            summary_parts.append(
+                f"{len(high_utilization)} quotas with high utilization"
+            )
 
         if summary_parts:
             summary = f"Found: {', '.join(summary_parts)}"
@@ -1893,23 +2019,32 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
             recommendations.append("Increase memory limits for OOMKilled containers")
             recommendations.append("Review application memory usage patterns")
         if pending_pods:
-            unschedulable = [p for p in pending_pods if p.get("issue") == "Unschedulable"]
+            unschedulable = [
+                p for p in pending_pods if p.get("issue") == "Unschedulable"
+            ]
             if unschedulable:
                 recommendations.append(
                     "Check node resources - pods cannot be scheduled due to insufficient resources"
                 )
             recommendations.append("Review pending pods and their resource requests")
         if resource_issues:
-            crash_loops = [i for i in resource_issues if i.get("issue") == "CrashLoopBackOff"]
+            crash_loops = [
+                i for i in resource_issues if i.get("issue") == "CrashLoopBackOff"
+            ]
             image_issues = [
-                i for i in resource_issues if i.get("issue") in ["ImagePullBackOff", "ErrImagePull"]
+                i
+                for i in resource_issues
+                if i.get("issue") in ["ImagePullBackOff", "ErrImagePull"]
             ]
             config_errors = [
                 i
                 for i in resource_issues
-                if i.get("issue") in ["CreateContainerError", "CreateContainerConfigError"]
+                if i.get("issue")
+                in ["CreateContainerError", "CreateContainerConfigError"]
             ]
-            high_restarts = [i for i in resource_issues if i.get("issue") == "HighRestartCount"]
+            high_restarts = [
+                i for i in resource_issues if i.get("issue") == "HighRestartCount"
+            ]
             if crash_loops:
                 recommendations.append(
                     "Investigate CrashLoopBackOff containers - check logs for errors"
@@ -1923,9 +2058,13 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
                     "Fix container configuration errors - check secrets, configmaps, and volume mounts"
                 )
             if high_restarts:
-                recommendations.append("Investigate containers with high restart counts")
+                recommendations.append(
+                    "Investigate containers with high restart counts"
+                )
         if high_utilization:
-            recommendations.append("Monitor resource quota usage and consider increasing limits")
+            recommendations.append(
+                "Monitor resource quota usage and consider increasing limits"
+            )
 
         return {
             "status": status,
@@ -1971,7 +2110,9 @@ async def check_resource_constraints(namespace: str) -> Dict[str, Any]:
 
 
 @mcp.tool()
-async def detect_anomalies(namespace: str, limit: int = 50) -> Dict[str, List[Dict[str, Any]]]:
+async def detect_anomalies(
+    namespace: str, limit: int = 50
+) -> Dict[str, List[Dict[str, Any]]]:
     """
     Detect anomalies in Tekton PipelineRuns/TaskRuns using z-score statistical analysis.
 
@@ -2015,7 +2156,9 @@ async def detect_anomalies(namespace: str, limit: int = 50) -> Dict[str, List[Di
                 try:
                     value = pr.get("duration").split()[0]
                     if value.replace(".", "", 1).isdigit():
-                        pipeline_data.append({"name": pr.get("name"), "duration": float(value)})
+                        pipeline_data.append(
+                            {"name": pr.get("name"), "duration": float(value)}
+                        )
                 except (ValueError, IndexError):
                     continue
 
@@ -2054,10 +2197,12 @@ async def detect_anomalies(namespace: str, limit: int = 50) -> Dict[str, List[Di
 
         # Extract anomaly lists from helper function results
         pipeline_anomalies = []
-        if pipeline_anomaly_result.get("anomalies_detected") and pipeline_anomaly_result.get(
-            "anomaly_details"
-        ):
-            for anomaly in pipeline_anomaly_result["anomaly_details"].get("anomalies", []):
+        if pipeline_anomaly_result.get(
+            "anomalies_detected"
+        ) and pipeline_anomaly_result.get("anomaly_details"):
+            for anomaly in pipeline_anomaly_result["anomaly_details"].get(
+                "anomalies", []
+            ):
                 original_data = anomaly.get("original_data", {})
                 stats = pipeline_anomaly_result["anomaly_details"]["statistics"]
                 pipeline_anomalies.append(
@@ -2092,7 +2237,10 @@ async def detect_anomalies(namespace: str, limit: int = 50) -> Dict[str, List[Di
                     }
                 )
 
-        return {"pipeline_anomalies": pipeline_anomalies, "task_anomalies": task_anomalies}
+        return {
+            "pipeline_anomalies": pipeline_anomalies,
+            "task_anomalies": task_anomalies,
+        }
 
     except Exception as e:
         logger.error(f"Error detecting anomalies: {e}")
@@ -2160,7 +2308,9 @@ async def _get_namespace_events_internal(
         page_count = 0
         MAX_PAGES = 20  # Safety limit
 
-        logger.info(f"Fetching events with pagination (limit={max_fetch_limit} per page)")
+        logger.info(
+            f"Fetching events with pagination (limit={max_fetch_limit} per page)"
+        )
 
         while page_count < MAX_PAGES:
             try:
@@ -2224,7 +2374,9 @@ async def _get_namespace_events_internal(
 
         if page_count >= MAX_PAGES and continue_token:
             logger.warning(f"Reached maximum page limit ({MAX_PAGES} pages)")
-            errors_list.append(f"Event fetching limited to {len(all_events)} events due to volume.")
+            errors_list.append(
+                f"Event fetching limited to {len(all_events)} events due to volume."
+            )
 
         original_count = len(all_events)
         logger.info(f"Found {original_count} events in namespace '{namespace}'")
@@ -2260,11 +2412,11 @@ async def _get_namespace_events_internal(
         for event in events:
             try:
                 timestamp = event.last_timestamp or event.first_timestamp or "Unknown"
-                event_str = f"[{timestamp}] {event.type}: {event.reason} - {event.message}"
+                event_str = (
+                    f"[{timestamp}] {event.type}: {event.reason} - {event.message}"
+                )
                 if event.involved_object:
-                    event_str += (
-                        f" (Object: {event.involved_object.kind}/{event.involved_object.name})"
-                    )
+                    event_str += f" (Object: {event.involved_object.kind}/{event.involved_object.name})"
                 events_list.append(event_str)
             except Exception as e:
                 errors_list.append(f"Error formatting event: {str(e)}")
@@ -2285,7 +2437,12 @@ async def _get_namespace_events_internal(
     except Exception as e:
         error_msg = f"Failed to fetch events from namespace '{namespace}': {str(e)}"
         logger.error(error_msg)
-        return {"namespace": namespace, "events": [], "errors": [error_msg], "applied_filters": {}}
+        return {
+            "namespace": namespace,
+            "events": [],
+            "errors": [error_msg],
+            "applied_filters": {},
+        }
 
 
 async def _get_namespace_events_as_dicts(
@@ -2322,7 +2479,10 @@ async def _get_namespace_events_as_dicts(
 
         # Fetch events
         event_list_response = await asyncio.to_thread(
-            k8s_core_api.list_namespaced_event, namespace=namespace, watch=False, limit=limit
+            k8s_core_api.list_namespaced_event,
+            namespace=namespace,
+            watch=False,
+            limit=limit,
         )
 
         for event in event_list_response.items:
@@ -2408,7 +2568,9 @@ async def smart_get_namespace_events(
         focus_areas = ["errors", "warnings", "failures"]
 
     tool_name = "smart_get_namespace_events"
-    logger.info(f"[{tool_name}] Starting smart event analysis for namespace '{namespace}'")
+    logger.info(
+        f"[{tool_name}] Starting smart event analysis for namespace '{namespace}'"
+    )
 
     try:
         # Validate inputs
@@ -2416,7 +2578,9 @@ async def smart_get_namespace_events(
             return {"error": "Namespace cannot be empty"}
 
         if max_context_tokens < 1000:
-            logger.warning(f"[{tool_name}] Low token limit ({max_context_tokens}), setting to 1000")
+            logger.warning(
+                f"[{tool_name}] Low token limit ({max_context_tokens}), setting to 1000"
+            )
             max_context_tokens = 1000
 
         # Step 1: Determine strategy and apply defaults
@@ -2458,10 +2622,14 @@ async def smart_get_namespace_events(
                     )
 
             except Exception as e:
-                logger.warning(f"[{tool_name}] Volume estimation failed, using safe default: {e}")
+                logger.warning(
+                    f"[{tool_name}] Volume estimation failed, using safe default: {e}"
+                )
                 time_period = SMART_EVENTS_CONFIG["defaults"]["default_time_window"]
 
-            logger.info(f"[{tool_name}] ADAPTIVE STRATEGY selected: {time_period} time window")
+            logger.info(
+                f"[{tool_name}] ADAPTIVE STRATEGY selected: {time_period} time window"
+            )
 
         # Step 3: Fetch events using internal function
         logger.info(
@@ -2504,7 +2672,9 @@ async def smart_get_namespace_events(
                     "token_usage": {"total_estimated": 200},
                     "applied_filters": raw_result.get("applied_filters", {}),
                     "smart_features": {
-                        "intelligent_defaults": time_period if last_n_events is None else None,
+                        "intelligent_defaults": time_period
+                        if last_n_events is None
+                        else None,
                         "context_overflow_prevention": True,
                         "focus_areas": focus_areas,
                     },
@@ -2552,11 +2722,15 @@ async def smart_get_namespace_events(
                     "events_tokens": int(total_tokens),
                     "summary_tokens": int(summary_tokens),
                     "metadata_tokens": metadata_tokens,
-                    "total_estimated": int(total_tokens + summary_tokens + metadata_tokens),
+                    "total_estimated": int(
+                        total_tokens + summary_tokens + metadata_tokens
+                    ),
                 },
                 "applied_filters": raw_result.get("applied_filters", {}),
                 "smart_features": {
-                    "intelligent_defaults": time_period if last_n_events is None else None,
+                    "intelligent_defaults": time_period
+                    if last_n_events is None
+                    else None,
                     "context_overflow_prevention": True,
                     "focus_areas": focus_areas,
                     "classification_applied": True,
@@ -2565,13 +2739,21 @@ async def smart_get_namespace_events(
                 "classification_metadata": {
                     "severity_distribution": {
                         severity.value: len(
-                            [e for e in selected_events if e["severity"] == severity.value]
+                            [
+                                e
+                                for e in selected_events
+                                if e["severity"] == severity.value
+                            ]
                         )
                         for severity in EventSeverity
                     },
                     "category_distribution": {
                         category.value: len(
-                            [e for e in selected_events if e["category"] == category.value]
+                            [
+                                e
+                                for e in selected_events
+                                if e["category"] == category.value
+                            ]
                         )
                         for category in EventCategory
                     },
@@ -2587,7 +2769,10 @@ async def smart_get_namespace_events(
                 "total_events": events_count,
                 "processed_events": min(events_count, max_raw),
                 "events": events_list[:max_raw] if events_list else [],
-                "applied_limits": {"max_raw_events": max_raw, "truncated": events_count > max_raw},
+                "applied_limits": {
+                    "max_raw_events": max_raw,
+                    "truncated": events_count > max_raw,
+                },
                 "token_usage": {"total_estimated": min(events_count, max_raw) * 60},
                 "note": "Raw strategy with safety limits applied to prevent context overflow",
             }
@@ -2682,7 +2867,9 @@ async def get_konflux_components_status() -> Dict[str, Any]:
             for namespace in namespaces:
                 # Get deployments
                 try:
-                    deployments = k8s_apps_api.list_namespaced_deployment(namespace)
+                    deployments = await asyncio.to_thread(
+                        k8s_apps_api.list_namespaced_deployment, namespace
+                    )
                     deployment_statuses = []
 
                     for deployment in deployments.items:
@@ -2698,11 +2885,17 @@ async def get_konflux_components_status() -> Dict[str, Any]:
                     if deployment_statuses:
                         if namespace not in results["components"]:
                             results["components"][namespace] = {}
-                        results["components"][namespace]["deployments"] = deployment_statuses
-                        logger.debug(f"Found {len(deployment_statuses)} deployments in {namespace}")
+                        results["components"][namespace]["deployments"] = (
+                            deployment_statuses
+                        )
+                        logger.debug(
+                            f"Found {len(deployment_statuses)} deployments in {namespace}"
+                        )
 
                 except ApiException as e:
-                    logger.warning(f"Could not get deployments in namespace {namespace}: {e}")
+                    logger.warning(
+                        f"Could not get deployments in namespace {namespace}: {e}"
+                    )
 
                 # Get pipeline runs stats
                 try:
@@ -2710,7 +2903,11 @@ async def get_konflux_components_status() -> Dict[str, Any]:
                     if (
                         pipeline_runs
                         and isinstance(pipeline_runs, list)
-                        and not any("error" in pr for pr in pipeline_runs if isinstance(pr, dict))
+                        and not any(
+                            "error" in pr
+                            for pr in pipeline_runs
+                            if isinstance(pr, dict)
+                        )
                     ):
                         # Count by status
                         status_counts = {}
@@ -2722,14 +2919,20 @@ async def get_konflux_components_status() -> Dict[str, Any]:
                             "total": len(pipeline_runs),
                             "status_counts": status_counts,
                         }
-                        logger.debug(f"Found {len(pipeline_runs)} pipeline runs in {namespace}")
+                        logger.debug(
+                            f"Found {len(pipeline_runs)} pipeline runs in {namespace}"
+                        )
 
                 except Exception as e:
-                    logger.warning(f"Could not get pipeline runs in namespace {namespace}: {e}")
+                    logger.warning(
+                        f"Could not get pipeline runs in namespace {namespace}: {e}"
+                    )
 
                 # Get resource quotas
                 try:
-                    resource_quotas = k8s_core_api.list_namespaced_resource_quota(namespace)
+                    resource_quotas = await asyncio.to_thread(
+                        k8s_core_api.list_namespaced_resource_quota, namespace
+                    )
                     if resource_quotas.items:
                         results["resource_usage"][namespace] = []
                         for quota in resource_quotas.items:
@@ -2741,19 +2944,26 @@ async def get_konflux_components_status() -> Dict[str, Any]:
                                     quota_data["resources"][resource] = {
                                         "limit": hard_limit,
                                         "used": used,
-                                        "utilization": calculate_utilization(used, hard_limit),
+                                        "utilization": calculate_utilization(
+                                            used, hard_limit
+                                        ),
                                     }
 
                             results["resource_usage"][namespace].append(quota_data)
 
                 except ApiException as e:
-                    logger.warning(f"Could not get resource quotas in namespace {namespace}: {e}")
+                    logger.warning(
+                        f"Could not get resource quotas in namespace {namespace}: {e}"
+                    )
 
         # Add summary statistics
         total_deployments = sum(
-            len(ns_data.get("deployments", [])) for ns_data in results["components"].values()
+            len(ns_data.get("deployments", []))
+            for ns_data in results["components"].values()
         )
-        total_pipelines = sum(stats.get("total", 0) for stats in results["pipeline_stats"].values())
+        total_pipelines = sum(
+            stats.get("total", 0) for stats in results["pipeline_stats"].values()
+        )
 
         results["summary"] = {
             "total_namespaces_analyzed": total_namespaces,
@@ -2821,7 +3031,9 @@ async def get_pod_logs(
         if isinstance(pod_logs, dict):
             # Check for error indicators
             error_keys = [
-                k for k in pod_logs.keys() if k.startswith(("error_", "pod_error", "no_"))
+                k
+                for k in pod_logs.keys()
+                if k.startswith(("error_", "pod_error", "no_"))
             ]
             if error_keys:
                 error_msg = pod_logs.get(error_keys[0], "Unknown error retrieving logs")
@@ -2832,16 +3044,22 @@ async def get_pod_logs(
                 if container_name in pod_logs:
                     return {"logs": {container_name: pod_logs[container_name]}}
                 else:
-                    return {"error": f"Container '{container_name}' not found in pod '{pod_name}'"}
+                    return {
+                        "error": f"Container '{container_name}' not found in pod '{pod_name}'"
+                    }
 
             # Return all container logs
             return {"logs": pod_logs}
 
         # Handle unexpected response format
-        return {"error": f"Unexpected response format from get_all_pod_logs: {type(pod_logs)}"}
+        return {
+            "error": f"Unexpected response format from get_all_pod_logs: {type(pod_logs)}"
+        }
 
     except Exception as e:
-        logger.error(f"Error in get_pod_logs for pod {pod_name} in namespace {namespace}: {e}")
+        logger.error(
+            f"Error in get_pod_logs for pod {pod_name} in namespace {namespace}: {e}"
+        )
         return {"error": f"Failed to retrieve logs: {str(e)}"}
 
 
@@ -2892,11 +3110,18 @@ async def analyze_failed_pipeline(namespace: str, pipeline_run: str) -> Dict[str
                         failed_tasks, probable_root_cause, recommended_actions.
     """
     try:
-        logger.info(f"Analyzing failed pipeline '{pipeline_run}' in namespace '{namespace}'")
+        logger.info(
+            f"Analyzing failed pipeline '{pipeline_run}' in namespace '{namespace}'"
+        )
 
         # Get pipeline details
         pipeline_details = await get_pipeline_details(
-            namespace, pipeline_run, k8s_custom_api, list_taskruns, calculate_duration, logger
+            namespace,
+            pipeline_run,
+            k8s_custom_api,
+            list_taskruns,
+            calculate_duration,
+            logger,
         )
 
         if "error" in pipeline_details:
@@ -2914,7 +3139,14 @@ async def analyze_failed_pipeline(namespace: str, pipeline_run: str) -> Dict[str
             task
             for task in pipeline_details.get("task_runs", [])
             if task.get("status")
-            not in ("Succeeded", "Running", "Started", "Pending", "TaskRunPending", None)
+            not in (
+                "Succeeded",
+                "Running",
+                "Started",
+                "Pending",
+                "TaskRunPending",
+                None,
+            )
         ]
 
         results = {
@@ -2925,7 +3157,9 @@ async def analyze_failed_pipeline(namespace: str, pipeline_run: str) -> Dict[str
             "failed_tasks": [],
         }
 
-        logger.info(f"Found {len(failed_tasks)} failed tasks in pipeline '{pipeline_run}'")
+        logger.info(
+            f"Found {len(failed_tasks)} failed tasks in pipeline '{pipeline_run}'"
+        )
 
         # Detailed analysis of each failed task
         for task in failed_tasks:
@@ -2957,7 +3191,9 @@ async def analyze_failed_pipeline(namespace: str, pipeline_run: str) -> Dict[str
                     pod_logs_available = False
                     error_msg = pod_logs.get("error", "")
                     if "Not Found" in error_msg:
-                        logs_unavailable_reason = "Pod was deleted (normal for completed pipelines)"
+                        logs_unavailable_reason = (
+                            "Pod was deleted (normal for completed pipelines)"
+                        )
                     else:
                         logs_unavailable_reason = error_msg
 
@@ -2983,9 +3219,7 @@ async def analyze_failed_pipeline(namespace: str, pipeline_run: str) -> Dict[str
                 if not error_patterns and failed_steps:
                     task_message = task_details.get("message", "")
                     for step in failed_steps:
-                        step_msg = (
-                            f"Step '{step['step_name']}' failed with exit code {step['exit_code']}"
-                        )
+                        step_msg = f"Step '{step['step_name']}' failed with exit code {step['exit_code']}"
                         if step.get("reason"):
                             step_msg += f" (reason: {step['reason']})"
                         error_patterns.append(step_msg)
@@ -3026,7 +3260,9 @@ async def analyze_failed_pipeline(namespace: str, pipeline_run: str) -> Dict[str
         results["probable_root_cause"] = determine_root_cause(results)
         actions = recommend_actions(results)
         seen = set()
-        results["recommended_actions"] = [a for a in actions if a not in seen and not seen.add(a)]
+        results["recommended_actions"] = [
+            a for a in actions if a not in seen and not seen.add(a)
+        ]
 
         logger.info(
             f"Pipeline analysis complete. Root cause: {results['probable_root_cause'][:50]}..."
@@ -3034,7 +3270,9 @@ async def analyze_failed_pipeline(namespace: str, pipeline_run: str) -> Dict[str
         return results
 
     except Exception as e:
-        logger.error(f"Error analyzing failed pipeline {pipeline_run}: {e}", exc_info=True)
+        logger.error(
+            f"Error analyzing failed pipeline {pipeline_run}: {e}", exc_info=True
+        )
         return {"error": str(e)}
 
 
@@ -3053,15 +3291,21 @@ async def list_recent_pipeline_runs(limit: int = 10) -> Dict[str, List[Dict[str,
     results: Dict[str, List[Dict[str, Any]]] = {}
 
     try:
-        logger.info(f"Listing recent pipeline runs across all namespaces (limit: {limit})")
+        logger.info(
+            f"Listing recent pipeline runs across all namespaces (limit: {limit})"
+        )
 
         # Use cluster-wide query with limit for performance (single API call)
         # Use a fixed fetch limit for consistent results regardless of requested limit
         # The API doesn't sort, so we need to fetch enough to ensure we get the most recent
         fetch_limit = 200  # Fixed limit for consistent results
 
-        pipeline_runs = k8s_custom_api.list_cluster_custom_object(
-            group="tekton.dev", version="v1", plural="pipelineruns", limit=fetch_limit
+        pipeline_runs = await asyncio.to_thread(
+            k8s_custom_api.list_cluster_custom_object,
+            group="tekton.dev",
+            version="v1",
+            plural="pipelineruns",
+            limit=fetch_limit,
         )
 
         # Collect all pipeline runs
@@ -3182,7 +3426,9 @@ async def track_pipeline_across_namespaces(pipeline_id: str) -> Dict[str, Any]:
         for ns_list in tekton_namespaces.values():
             all_namespaces.extend(ns_list)
 
-        logger.info(f"Searching {len(all_namespaces)} namespaces for pipeline '{pipeline_id}'")
+        logger.info(
+            f"Searching {len(all_namespaces)} namespaces for pipeline '{pipeline_id}'"
+        )
 
         # Track pipeline components
         results = {
@@ -3214,7 +3460,11 @@ async def track_pipeline_across_namespaces(pipeline_id: str) -> Dict[str, Any]:
                     task_runs = await list_taskruns(namespace, pipeline_id)
                     for task_run in task_runs:
                         task_details = await get_task_details(
-                            namespace, task_run["name"], k8s_custom_api, calculate_duration, logger
+                            namespace,
+                            task_run["name"],
+                            k8s_custom_api,
+                            calculate_duration,
+                            logger,
                         )
                         results["task_runs"].append(
                             {"namespace": namespace, "details": task_details}
@@ -3226,7 +3476,10 @@ async def track_pipeline_across_namespaces(pipeline_id: str) -> Dict[str, Any]:
                             pod_logs_result = await get_pod_logs(namespace, pod_name)
 
                             # Extract log content as string for analysis
-                            if isinstance(pod_logs_result, dict) and "logs" in pod_logs_result:
+                            if (
+                                isinstance(pod_logs_result, dict)
+                                and "logs" in pod_logs_result
+                            ):
                                 log_content = ""
                                 for pod, logs in pod_logs_result["logs"].items():
                                     if isinstance(logs, list):
@@ -3279,7 +3532,9 @@ async def track_pipeline_across_namespaces(pipeline_id: str) -> Dict[str, Any]:
                             }
                         )
             except Exception as e:
-                logger.warning(f"Error finding related resources in namespace {namespace}: {e}")
+                logger.warning(
+                    f"Error finding related resources in namespace {namespace}: {e}"
+                )
 
         # Add summary
         results["summary"] = {
@@ -3360,7 +3615,10 @@ async def find_pipeline(
                 # Cap at 200 to avoid multi-MB responses causing IncompleteRead
                 safe_limit = min(pipeline_runs_limit, 200)
                 return k8s_custom_api.list_cluster_custom_object(
-                    group="tekton.dev", version="v1", plural="pipelineruns", limit=safe_limit
+                    group="tekton.dev",
+                    version="v1",
+                    plural="pipelineruns",
+                    limit=safe_limit,
                 )
             except ApiException as e:
                 return {"error": str(e), "items": []}
@@ -3383,7 +3641,10 @@ async def find_pipeline(
                 # call (~97MB response). Prefer namespace-scoped queries instead.
                 safe_limit = min(task_runs_limit, 100)
                 return k8s_custom_api.list_cluster_custom_object(
-                    group="tekton.dev", version="v1", plural="taskruns", limit=safe_limit
+                    group="tekton.dev",
+                    version="v1",
+                    plural="taskruns",
+                    limit=safe_limit,
                 )
             except ApiException as e:
                 return {"error": str(e), "items": []}
@@ -3439,11 +3700,15 @@ async def find_pipeline(
 
             if include_taskruns:
                 tr_future = loop.run_in_executor(executor, fetch_taskruns_cluster)
-                pipeline_runs_resp, task_runs_resp, repositories_resp = await asyncio.gather(
-                    pr_future, tr_future, repo_future
-                )
+                (
+                    pipeline_runs_resp,
+                    task_runs_resp,
+                    repositories_resp,
+                ) = await asyncio.gather(pr_future, tr_future, repo_future)
             else:
-                pipeline_runs_resp, repositories_resp = await asyncio.gather(pr_future, repo_future)
+                pipeline_runs_resp, repositories_resp = await asyncio.gather(
+                    pr_future, repo_future
+                )
                 task_runs_resp = {"items": [], "skipped": True}
 
         # Track namespaces found and counts for sampling info
@@ -3455,7 +3720,9 @@ async def find_pipeline(
 
         # Process PipelineRuns with max_results limit
         if "error" in pipeline_runs_resp:
-            results["diagnostic_info"]["pipelineruns_error"] = pipeline_runs_resp["error"]
+            results["diagnostic_info"]["pipelineruns_error"] = pipeline_runs_resp[
+                "error"
+            ]
 
         pr_items = pipeline_runs_resp.get("items", [])
         for pr in pr_items:
@@ -3532,7 +3799,9 @@ async def find_pipeline(
         # Process Repositories
         # When namespaces filter is specified, only include repositories from those namespaces
         if "error" in repositories_resp:
-            results["diagnostic_info"]["repositories_error"] = repositories_resp["error"]
+            results["diagnostic_info"]["repositories_error"] = repositories_resp[
+                "error"
+            ]
         for repo in repositories_resp.get("items", []):
             namespace = repo.get("metadata", {}).get("namespace", "")
             repo_name = repo.get("metadata", {}).get("name", "")
@@ -3580,7 +3849,9 @@ async def find_pipeline(
         return results
 
     except Exception as e:
-        logger.error(f"Error finding pipeline {pipeline_id_pattern}: {e}", exc_info=True)
+        logger.error(
+            f"Error finding pipeline {pipeline_id_pattern}: {e}", exc_info=True
+        )
         return {"error": str(e), "diagnostic_info": results.get("diagnostic_info", {})}
 
 
@@ -3621,24 +3892,30 @@ async def get_tekton_pipeline_runs_status(
         # Fetch PipelineRuns per-namespace for reliability on large clusters
         all_namespaces = []
         try:
-            ns_list = k8s_core_api.list_namespace(
-                label_selector="toolchain.dev.openshift.com/type=tenant"
+            ns_list = await asyncio.to_thread(
+                k8s_core_api.list_namespace,
+                label_selector="toolchain.dev.openshift.com/type=tenant",
             )
             all_namespaces = [ns.metadata.name for ns in ns_list.items]
             logger.info(f"Found {len(all_namespaces)} tenant namespaces")
         except Exception:
             # Fallback: cluster-wide query with safe limit
-            logger.info("Namespace label selector failed, falling back to cluster-wide query")
+            logger.info(
+                "Namespace label selector failed, falling back to cluster-wide query"
+            )
 
         pipeline_runs_items = []
         active_namespaces = set()
 
         if all_namespaces:
             # Per-namespace fetch with limit -- avoids 97MB cluster-wide responses
-            per_ns_limit = max(5, safe_pr_limit // min(len(all_namespaces), max_namespaces))
+            per_ns_limit = max(
+                5, safe_pr_limit // min(len(all_namespaces), max_namespaces)
+            )
             for ns in all_namespaces[: max_namespaces * 2]:
                 try:
-                    ns_prs = k8s_custom_api.list_namespaced_custom_object(
+                    ns_prs = await asyncio.to_thread(
+                        k8s_custom_api.list_namespaced_custom_object,
                         group="tekton.dev",
                         version="v1",
                         namespace=ns,
@@ -3657,8 +3934,12 @@ async def get_tekton_pipeline_runs_status(
             pipeline_runs_items = pipeline_runs_items[:safe_pr_limit]
         else:
             # Fallback: cluster-wide with safe limit
-            pipeline_runs = k8s_custom_api.list_cluster_custom_object(
-                group="tekton.dev", version="v1", plural="pipelineruns", limit=safe_pr_limit
+            pipeline_runs = await asyncio.to_thread(
+                k8s_custom_api.list_cluster_custom_object,
+                group="tekton.dev",
+                version="v1",
+                plural="pipelineruns",
+                limit=safe_pr_limit,
             )
             pipeline_runs_items = pipeline_runs.get("items", [])
             for pr in pipeline_runs_items:
@@ -3672,7 +3953,8 @@ async def get_tekton_pipeline_runs_status(
         task_runs_items = []
         for ns in list(active_namespaces)[:max_namespaces]:
             try:
-                ns_task_runs = k8s_custom_api.list_namespaced_custom_object(
+                ns_task_runs = await asyncio.to_thread(
+                    k8s_custom_api.list_namespaced_custom_object,
                     group="tekton.dev",
                     version="v1",
                     namespace=ns,
@@ -3748,16 +4030,24 @@ async def get_tekton_pipeline_runs_status(
                 start_time_str = status.get("startTime")
                 if start_time_str and not status.get("completionTime"):
                     try:
-                        start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+                        start_time = datetime.fromisoformat(
+                            start_time_str.replace("Z", "+00:00")
+                        )
                         runtime = datetime.now(start_time.tzinfo) - start_time
                         if runtime.total_seconds() > 3600:  # 1 hour
                             long_running_info = {
                                 "name": pr.get("metadata", {}).get("name", "unknown"),
-                                "namespace": pr.get("metadata", {}).get("namespace", "unknown"),
-                                "runtime_hours": round(runtime.total_seconds() / 3600, 2),
+                                "namespace": pr.get("metadata", {}).get(
+                                    "namespace", "unknown"
+                                ),
+                                "runtime_hours": round(
+                                    runtime.total_seconds() / 3600, 2
+                                ),
                                 "start_time": start_time_str,
                             }
-                            analysis["pipeline_runs"]["long_running"].append(long_running_info)
+                            analysis["pipeline_runs"]["long_running"].append(
+                                long_running_info
+                            )
                     except Exception as e:
                         logger.debug(f"Error parsing start time for PipelineRun: {e}")
 
@@ -3809,24 +4099,24 @@ async def get_tekton_pipeline_runs_status(
         analysis["pipeline_runs"]["recent_failures"].sort(
             key=lambda x: x.get("start_time") or "", reverse=True
         )
-        analysis["pipeline_runs"]["recent_failures"] = analysis["pipeline_runs"]["recent_failures"][
-            :recent_failures_limit
-        ]
+        analysis["pipeline_runs"]["recent_failures"] = analysis["pipeline_runs"][
+            "recent_failures"
+        ][:recent_failures_limit]
 
         analysis["task_runs"]["recent_failures"].sort(
             key=lambda x: x.get("start_time") or "", reverse=True
         )
-        analysis["task_runs"]["recent_failures"] = analysis["task_runs"]["recent_failures"][
-            :recent_failures_limit
-        ]
+        analysis["task_runs"]["recent_failures"] = analysis["task_runs"][
+            "recent_failures"
+        ][:recent_failures_limit]
 
         # Sort long_running by runtime (longest first) and apply limit
         analysis["pipeline_runs"]["long_running"].sort(
             key=lambda x: x.get("runtime_hours", 0), reverse=True
         )
-        analysis["pipeline_runs"]["long_running"] = analysis["pipeline_runs"]["long_running"][
-            :long_running_limit
-        ]
+        analysis["pipeline_runs"]["long_running"] = analysis["pipeline_runs"][
+            "long_running"
+        ][:long_running_limit]
 
         # Add counts and aggregations
         analysis["pipeline_runs"]["total_failures"] = total_pr_failures
@@ -3892,7 +4182,9 @@ async def get_tekton_pipeline_runs_status(
 
 @mcp.tool()
 async def detect_log_anomalies(
-    logs: str, baseline_patterns: Optional[List[str]] = None, severity_threshold: str = "medium"
+    logs: str,
+    baseline_patterns: Optional[List[str]] = None,
+    severity_threshold: str = "medium",
 ) -> Dict[str, Any]:
     """
     Detect anomalies in log data using error frequency, pattern repetition, and timestamp analysis.
@@ -3905,7 +4197,9 @@ async def detect_log_anomalies(
     Returns:
         Dict[str, Any]: Keys: anomaly_detected (bool), anomaly_details, analysis_summary.
     """
-    logger.info(f"Starting log anomaly detection with severity threshold: {severity_threshold}")
+    logger.info(
+        f"Starting log anomaly detection with severity threshold: {severity_threshold}"
+    )
 
     if not logs or logs.strip() == "":
         logger.warning("Empty or null logs provided for anomaly detection")
@@ -3926,7 +4220,9 @@ async def detect_log_anomalies(
             normalized_logs = normalized_logs.replace("\\n", "\n")
 
         # Parse logs into lines
-        log_lines = [line.strip() for line in normalized_logs.split("\n") if line.strip()]
+        log_lines = [
+            line.strip() for line in normalized_logs.split("\n") if line.strip()
+        ]
         total_lines = len(log_lines)
 
         if total_lines == 0:
@@ -3943,14 +4239,24 @@ async def detect_log_anomalies(
 
         # Define severity thresholds
         thresholds = {
-            "low": {"error_rate": 0.05, "warn_rate": 0.30, "repetition_rate": 0.3, "time_gap": 300},
+            "low": {
+                "error_rate": 0.05,
+                "warn_rate": 0.30,
+                "repetition_rate": 0.3,
+                "time_gap": 300,
+            },
             "medium": {
                 "error_rate": 0.1,
                 "warn_rate": 0.60,
                 "repetition_rate": 0.5,
                 "time_gap": 180,
             },
-            "high": {"error_rate": 0.2, "warn_rate": 0.90, "repetition_rate": 0.7, "time_gap": 60},
+            "high": {
+                "error_rate": 0.2,
+                "warn_rate": 0.90,
+                "repetition_rate": 0.7,
+                "time_gap": 60,
+            },
         }
 
         threshold_config = thresholds.get(severity_threshold, thresholds["medium"])
@@ -4014,7 +4320,9 @@ async def detect_log_anomalies(
         line_frequency = {}
         for line in log_lines:
             # Normalize line by removing timestamps and variable data
-            normalized = re.sub(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}", "TIMESTAMP", line)
+            normalized = re.sub(
+                r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}", "TIMESTAMP", line
+            )
             normalized = re.sub(r"\b\d+\b", "NUMBER", normalized)
             normalized = re.sub(r"\b[a-f0-9]{8,}\b", "HASH", normalized)
 
@@ -4041,10 +4349,14 @@ async def detect_log_anomalies(
         timestamps = []
         for line in log_lines:
             # Extract timestamps
-            timestamp_match = re.search(r"(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})", line)
+            timestamp_match = re.search(
+                r"(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})", line
+            )
             if timestamp_match:
                 try:
-                    ts = datetime.fromisoformat(timestamp_match.group(1).replace("T", " "))
+                    ts = datetime.fromisoformat(
+                        timestamp_match.group(1).replace("T", " ")
+                    )
                     timestamps.append(ts)
                 except Exception:
                     continue
@@ -4080,9 +4392,13 @@ async def detect_log_anomalies(
                 one_minute_windows = {}
                 for ts in timestamps:
                     minute_key = ts.replace(second=0, microsecond=0)
-                    one_minute_windows[minute_key] = one_minute_windows.get(minute_key, 0) + 1
+                    one_minute_windows[minute_key] = (
+                        one_minute_windows.get(minute_key, 0) + 1
+                    )
 
-                max_burst = max(one_minute_windows.values()) if one_minute_windows else 0
+                max_burst = (
+                    max(one_minute_windows.values()) if one_minute_windows else 0
+                )
                 if max_burst > burst_threshold:
                     anomalies.append(
                         {
@@ -4117,7 +4433,10 @@ async def detect_log_anomalies(
                     }
                 )
 
-            if missing_patterns and len(missing_patterns) > len(baseline_patterns) * 0.5:
+            if (
+                missing_patterns
+                and len(missing_patterns) > len(baseline_patterns) * 0.5
+            ):
                 anomalies.append(
                     {
                         "type": "missing_expected_patterns",
@@ -4166,7 +4485,9 @@ async def detect_log_anomalies(
         if anomaly_detected:
             # Sort anomalies by severity
             severity_order = {"high": 3, "medium": 2, "low": 1}
-            anomalies.sort(key=lambda x: severity_order.get(x["severity"], 0), reverse=True)
+            anomalies.sort(
+                key=lambda x: severity_order.get(x["severity"], 0), reverse=True
+            )
 
             anomaly_details = {
                 "total_anomalies": len(anomalies),
@@ -4175,18 +4496,22 @@ async def detect_log_anomalies(
                     "total_lines": total_lines,
                     "error_rate": error_rate,
                     "unique_patterns": len(line_frequency),
-                    "timestamp_coverage": len(timestamps) / total_lines if total_lines > 0 else 0,
+                    "timestamp_coverage": len(timestamps) / total_lines
+                    if total_lines > 0
+                    else 0,
                 },
             }
 
-            analysis_summary = f"Detected {len(anomalies)} anomalies in {total_lines} log lines. "
+            analysis_summary = (
+                f"Detected {len(anomalies)} anomalies in {total_lines} log lines. "
+            )
             analysis_summary += f"Highest severity: {anomalies[0]['severity']}. "
-            analysis_summary += f"Primary issues: {', '.join([a['type'] for a in anomalies[:3]])}"
+            analysis_summary += (
+                f"Primary issues: {', '.join([a['type'] for a in anomalies[:3]])}"
+            )
         else:
             anomaly_details = None
-            analysis_summary = (
-                f"No anomalies detected in {total_lines} log lines. Log patterns appear normal."
-            )
+            analysis_summary = f"No anomalies detected in {total_lines} log lines. Log patterns appear normal."
 
         logger.info(f"Anomaly detection completed. Found {len(anomalies)} anomalies")
 
@@ -4233,7 +4558,9 @@ async def search_resources_by_labels(
         Dict: Search results with resource details, analysis, and recommendations.
     """
     start_time = time.time()
-    logger.info(f"Starting Kubernetes resource search by labels for types: {resource_types}")
+    logger.info(
+        f"Starting Kubernetes resource search by labels for types: {resource_types}"
+    )
 
     try:
         # Build label selector string
@@ -4243,11 +4570,13 @@ async def search_resources_by_labels(
         # Get accessible namespaces if not specified
         if namespaces is None:
             try:
-                ns_response = k8s_core_api.list_namespace()
+                ns_response = await asyncio.to_thread(k8s_core_api.list_namespace)
                 accessible_namespaces = [ns.metadata.name for ns in ns_response.items]
                 logger.info(f"Found {len(accessible_namespaces)} accessible namespaces")
             except ApiException as e:
-                logger.warning(f"Could not list namespaces: {e.reason}. Using default namespace")
+                logger.warning(
+                    f"Could not list namespaces: {e.reason}. Using default namespace"
+                )
                 accessible_namespaces = ["default"]
         else:
             accessible_namespaces = namespaces
@@ -4283,7 +4612,8 @@ async def search_resources_by_labels(
                             if api_info["api"] == "core_v1":
                                 api_client = k8s_core_api
                                 method = getattr(api_client, api_info["method"])
-                                response = method(
+                                response = await asyncio.to_thread(
+                                    method,
                                     namespace=namespace,
                                     label_selector=label_selector,
                                     limit=limit_per_type,
@@ -4291,7 +4621,8 @@ async def search_resources_by_labels(
                             elif api_info["api"] == "apps_v1":
                                 api_client = k8s_apps_api
                                 method = getattr(api_client, api_info["method"])
-                                response = method(
+                                response = await asyncio.to_thread(
+                                    method,
                                     namespace=namespace,
                                     label_selector=label_selector,
                                     limit=limit_per_type,
@@ -4299,13 +4630,15 @@ async def search_resources_by_labels(
                             elif api_info["api"] == "batch_v1":
                                 api_client = k8s_batch_api
                                 method = getattr(api_client, api_info["method"])
-                                response = method(
+                                response = await asyncio.to_thread(
+                                    method,
                                     namespace=namespace,
                                     label_selector=label_selector,
                                     limit=limit_per_type,
                                 )
                             elif api_info["api"] == "custom":
-                                response = k8s_custom_api.list_namespaced_custom_object(
+                                response = await asyncio.to_thread(
+                                    k8s_custom_api.list_namespaced_custom_object,
                                     group=api_info["group"],
                                     version=api_info["version"],
                                     namespace=namespace,
@@ -4362,7 +4695,11 @@ async def search_resources_by_labels(
                         if api_info["api"] == "core_v1":
                             api_client = k8s_core_api
                             method = getattr(api_client, api_info["method"])
-                            response = method(label_selector=label_selector, limit=limit_per_type)
+                            response = await asyncio.to_thread(
+                                method,
+                                label_selector=label_selector,
+                                limit=limit_per_type,
+                            )
 
                         # Custom objects return dicts, native K8s objects have items attribute
                         if isinstance(response, dict):
@@ -4436,7 +4773,9 @@ async def search_resources_by_labels(
                 {
                     "type": "permission_check",
                     "description": "Some resources could not be accessed due to permission errors",
-                    "affected_resources": [err["resource_type"] for err in error_details],
+                    "affected_resources": [
+                        err["resource_type"] for err in error_details
+                    ],
                     "suggested_actions": [
                         "Check RBAC permissions",
                         "Verify cluster connectivity",
@@ -4502,7 +4841,11 @@ async def search_resources_by_labels(
                 "search_duration_ms": round((time.time() - start_time) * 1000, 2),
             },
             "resources": [],
-            "label_analysis": {"common_labels": [], "unique_labels": [], "label_patterns": []},
+            "label_analysis": {
+                "common_labels": [],
+                "unique_labels": [],
+                "label_patterns": [],
+            },
             "namespace_distribution": [],
             "error_details": [
                 {
@@ -4547,7 +4890,9 @@ async def _get_k8s_bearer_token() -> Optional[str]:
     try:
         import subprocess
 
-        result = subprocess.run(["oc", "whoami", "-t"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            ["oc", "whoami", "-t"], capture_output=True, text=True, timeout=5
+        )
         if result.returncode == 0 and result.stdout.strip():
             token = result.stdout.strip()
             logger.debug("Obtained fresh bearer token via 'oc whoami -t'")
@@ -4584,7 +4929,9 @@ async def _get_k8s_bearer_token() -> Optional[str]:
             auth_header = k8s_config.api_key["authorization"]
             if auth_header.startswith("Bearer "):
                 token = auth_header[7:]
-                logger.debug("Using bearer token from in-memory k8s client config (may be stale)")
+                logger.debug(
+                    "Using bearer token from in-memory k8s client config (may be stale)"
+                )
                 return token
 
     except Exception as e:
@@ -4597,13 +4944,19 @@ async def _get_k8s_bearer_token() -> Optional[str]:
             with open(SA_TOKEN_PATH, "r") as f:
                 token = f.read().strip()
                 if token:
-                    logger.info("Successfully obtained token from ServiceAccount token file")
+                    logger.info(
+                        "Successfully obtained token from ServiceAccount token file"
+                    )
                     return token
     except Exception as e:
         logger.debug(f"Could not read ServiceAccount token: {e}")
 
     # Method 5: Environment variable fallback
-    token = os.getenv("PROMETHEUS_TOKEN") or os.getenv("OPENSHIFT_TOKEN") or os.getenv("OC_TOKEN")
+    token = (
+        os.getenv("PROMETHEUS_TOKEN")
+        or os.getenv("OPENSHIFT_TOKEN")
+        or os.getenv("OC_TOKEN")
+    )
     if token:
         logger.info("Using token from environment variable")
         return token
@@ -4626,7 +4979,8 @@ async def _discover_prometheus_via_routes() -> Optional[str]:
 
     try:
         # Query routes in openshift-monitoring namespace
-        routes = k8s_custom_api.list_namespaced_custom_object(
+        routes = await asyncio.to_thread(
+            k8s_custom_api.list_namespaced_custom_object,
             group="route.openshift.io",
             version="v1",
             namespace="openshift-monitoring",
@@ -4665,12 +5019,16 @@ async def _discover_prometheus_via_routes() -> Optional[str]:
                     tls = route.get("spec", {}).get("tls")
                     protocol = "https" if tls else "http"
                     endpoint = f"{protocol}://{host}"
-                    logger.info(f"Discovered Prometheus via route '{route_name}': {endpoint}")
+                    logger.info(
+                        f"Discovered Prometheus via route '{route_name}': {endpoint}"
+                    )
                     return endpoint
 
     except client.rest.ApiException as e:
         if e.status == 404:
-            logger.debug("OpenShift routes API not available (not an OpenShift cluster)")
+            logger.debug(
+                "OpenShift routes API not available (not an OpenShift cluster)"
+            )
         else:
             logger.warning(f"Error querying OpenShift routes: {e}")
     except Exception as e:
@@ -4693,8 +5051,11 @@ async def _discover_prometheus_via_operator_crd() -> Optional[str]:
 
     try:
         # List all Prometheus custom resources cluster-wide
-        prometheus_resources = k8s_custom_api.list_cluster_custom_object(
-            group="monitoring.coreos.com", version="v1", plural="prometheuses"
+        prometheus_resources = await asyncio.to_thread(
+            k8s_custom_api.list_cluster_custom_object,
+            group="monitoring.coreos.com",
+            version="v1",
+            plural="prometheuses",
         )
 
         for prom in prometheus_resources.get("items", []):
@@ -4709,8 +5070,10 @@ async def _discover_prometheus_via_operator_crd() -> Optional[str]:
             service_name = f"prometheus-{name}"
 
             try:
-                service = k8s_core_api.read_namespaced_service(
-                    name=service_name, namespace=namespace
+                service = await asyncio.to_thread(
+                    k8s_core_api.read_namespaced_service,
+                    name=service_name,
+                    namespace=namespace,
                 )
 
                 # Get service port (default Prometheus port is 9090)
@@ -4767,7 +5130,9 @@ async def _discover_prometheus_via_services() -> Optional[str]:
         # First, try specific namespaces
         for namespace in monitoring_namespaces:
             try:
-                services = k8s_core_api.list_namespaced_service(namespace=namespace)
+                services = await asyncio.to_thread(
+                    k8s_core_api.list_namespaced_service, namespace=namespace
+                )
 
                 # Prioritize actual Prometheus server services (not alertmanager, pushgateway, etc.)
                 # Priority: prometheus-server > prometheus-k8s > prometheus > any with prometheus in name
@@ -4795,7 +5160,9 @@ async def _discover_prometheus_via_services() -> Optional[str]:
                                 ):
                                     port = p.port
                                     break
-                            endpoint = f"http://{name}.{namespace}.svc.cluster.local:{port}"
+                            endpoint = (
+                                f"http://{name}.{namespace}.svc.cluster.local:{port}"
+                            )
                             logger.info(
                                 f"Discovered Prometheus service (priority match): {endpoint}"
                             )
@@ -4806,7 +5173,10 @@ async def _discover_prometheus_via_services() -> Optional[str]:
                     name = service.metadata.name
                     if "prometheus" in name.lower():
                         # Skip non-server services
-                        if any(name.lower().endswith(suffix) for suffix in excluded_suffixes):
+                        if any(
+                            name.lower().endswith(suffix)
+                            for suffix in excluded_suffixes
+                        ):
                             continue
 
                         ports = service.spec.ports or []
@@ -4836,8 +5206,9 @@ async def _discover_prometheus_via_services() -> Optional[str]:
 
         for label_selector in label_selectors:
             try:
-                services = k8s_core_api.list_service_for_all_namespaces(
-                    label_selector=label_selector
+                services = await asyncio.to_thread(
+                    k8s_core_api.list_service_for_all_namespaces,
+                    label_selector=label_selector,
                 )
 
                 if services.items:
@@ -4899,7 +5270,9 @@ async def _discover_thanos_via_services() -> Optional[str]:
         # First pass: check known monitoring namespaces for priority service names
         for namespace in monitoring_namespaces:
             try:
-                services = k8s_core_api.list_namespaced_service(namespace=namespace)
+                services = await asyncio.to_thread(
+                    k8s_core_api.list_namespaced_service, namespace=namespace
+                )
 
                 for priority_name in priority_names:
                     for service in services.items:
@@ -4912,9 +5285,7 @@ async def _discover_thanos_via_services() -> Optional[str]:
                                 ):
                                     port = p.port
                                     break
-                            endpoint = (
-                                f"http://{priority_name}.{namespace}.svc.cluster.local:{port}"
-                            )
+                            endpoint = f"http://{priority_name}.{namespace}.svc.cluster.local:{port}"
                             logger.info(
                                 f"Discovered Thanos Query service (priority match): {endpoint}"
                             )
@@ -4932,9 +5303,7 @@ async def _discover_thanos_via_services() -> Optional[str]:
                             ):
                                 port = p.port
                                 break
-                        endpoint = (
-                            f"http://{service.metadata.name}.{namespace}.svc.cluster.local:{port}"
-                        )
+                        endpoint = f"http://{service.metadata.name}.{namespace}.svc.cluster.local:{port}"
                         logger.info(f"Discovered Thanos Query service: {endpoint}")
                         return endpoint
 
@@ -4955,8 +5324,9 @@ async def _discover_thanos_via_services() -> Optional[str]:
 
         for label_selector in label_selectors:
             try:
-                services = k8s_core_api.list_service_for_all_namespaces(
-                    label_selector=label_selector
+                services = await asyncio.to_thread(
+                    k8s_core_api.list_service_for_all_namespaces,
+                    label_selector=label_selector,
                 )
                 if services.items:
                     service = services.items[0]
@@ -4965,7 +5335,9 @@ async def _discover_thanos_via_services() -> Optional[str]:
                     ports = service.spec.ports or []
                     port = 9090
                     for p in ports:
-                        if p.port in thanos_http_ports or (p.name and p.name in ["http", "web"]):
+                        if p.port in thanos_http_ports or (
+                            p.name and p.name in ["http", "web"]
+                        ):
                             port = p.port
                             break
                     endpoint = f"http://{name}.{namespace}.svc.cluster.local:{port}"
@@ -4975,7 +5347,9 @@ async def _discover_thanos_via_services() -> Optional[str]:
                     return endpoint
 
             except client.rest.ApiException as e:
-                logger.debug(f"Error with Thanos label selector '{label_selector}': {e}")
+                logger.debug(
+                    f"Error with Thanos label selector '{label_selector}': {e}"
+                )
                 continue
 
     except Exception as e:
@@ -4984,7 +5358,9 @@ async def _discover_thanos_via_services() -> Optional[str]:
     return None
 
 
-async def _discover_prometheus_endpoint(cluster_override: Optional[str] = None) -> tuple:
+async def _discover_prometheus_endpoint(
+    cluster_override: Optional[str] = None,
+) -> tuple:
     """
     Discover Prometheus or Thanos Query endpoint using multiple strategies.
 
@@ -5008,7 +5384,9 @@ async def _discover_prometheus_endpoint(cluster_override: Optional[str] = None) 
     # 0. Check for THANOS_URL environment variable (highest priority)
     env_thanos_url = os.getenv("THANOS_URL")
     if env_thanos_url:
-        logger.info(f"Using Thanos endpoint from THANOS_URL environment variable: {env_thanos_url}")
+        logger.info(
+            f"Using Thanos endpoint from THANOS_URL environment variable: {env_thanos_url}"
+        )
         return (env_thanos_url, "thanos")
 
     # 1. Check for PROMETHEUS_URL environment variable
@@ -5045,7 +5423,11 @@ async def _discover_prometheus_endpoint(cluster_override: Optional[str] = None) 
         discovery_methods = [
             ("Thanos Query Services", _discover_thanos_via_services, "thanos"),
             ("Prometheus Services", _discover_prometheus_via_services, "prometheus"),
-            ("Prometheus Operator CRD", _discover_prometheus_via_operator_crd, "prometheus"),
+            (
+                "Prometheus Operator CRD",
+                _discover_prometheus_via_operator_crd,
+                "prometheus",
+            ),
             (
                 "OpenShift Routes",
                 _discover_prometheus_via_routes,
@@ -5060,7 +5442,11 @@ async def _discover_prometheus_endpoint(cluster_override: Optional[str] = None) 
                 None,
             ),  # type detected from route name
             ("Thanos Query Services", _discover_thanos_via_services, "thanos"),
-            ("Prometheus Operator CRD", _discover_prometheus_via_operator_crd, "prometheus"),
+            (
+                "Prometheus Operator CRD",
+                _discover_prometheus_via_operator_crd,
+                "prometheus",
+            ),
             ("Prometheus Services", _discover_prometheus_via_services, "prometheus"),
         ]
 
@@ -5071,10 +5457,14 @@ async def _discover_prometheus_endpoint(cluster_override: Optional[str] = None) 
             if endpoint:
                 # For OpenShift Routes, detect type from the discovered endpoint/route name
                 if method_type is None:
-                    endpoint_type = "thanos" if "thanos" in endpoint.lower() else "prometheus"
+                    endpoint_type = (
+                        "thanos" if "thanos" in endpoint.lower() else "prometheus"
+                    )
                 else:
                     endpoint_type = method_type
-                _prometheus_endpoint_cache.set(endpoint, cache_key, endpoint_type=endpoint_type)
+                _prometheus_endpoint_cache.set(
+                    endpoint, cache_key, endpoint_type=endpoint_type
+                )
                 return (endpoint, endpoint_type)
         except Exception as e:
             logger.warning(f"Discovery method '{method_name}' failed: {e}")
@@ -5087,7 +5477,9 @@ async def _discover_prometheus_endpoint(cluster_override: Optional[str] = None) 
             if endpoint:
                 endpoint_type = config.get("type", "prometheus")
                 logger.info(f"Using fallback {endpoint_type} endpoint: {endpoint}")
-                _prometheus_endpoint_cache.set(endpoint, cache_key, endpoint_type=endpoint_type)
+                _prometheus_endpoint_cache.set(
+                    endpoint, cache_key, endpoint_type=endpoint_type
+                )
                 return (endpoint, endpoint_type)
 
     logger.error("Could not discover Prometheus/Thanos endpoint via any method")
@@ -5122,7 +5514,9 @@ def _parse_time_parameter(time_param: str) -> str:
         return time_param
 
 
-async def _execute_prometheus_query_internal(query: str, timeout: int = 30) -> Dict[str, Any]:
+async def _execute_prometheus_query_internal(
+    query: str, timeout: int = 30
+) -> Dict[str, Any]:
     """
     Internal helper to execute Prometheus/Thanos queries from within other tools.
 
@@ -5224,7 +5618,9 @@ async def _process_prometheus_results(
                 )
 
             except re.error as e:
-                logger.warning(f"Invalid namespace filter regex '{namespace_filter}': {e}")
+                logger.warning(
+                    f"Invalid namespace filter regex '{namespace_filter}': {e}"
+                )
 
         # Apply limit if specified
         if limit and len(raw_results) > limit:
@@ -5291,10 +5687,16 @@ def _format_as_table(results: List[Dict], result_type: str) -> str:
 
             for result in results:
                 metric = result.get("metric", {})
-                value = result.get("value", ["", ""])[1] if result.get("value") else "N/A"
+                value = (
+                    result.get("value", ["", ""])[1] if result.get("value") else "N/A"
+                )
 
                 metric_name = metric.get("__name__", "")
-                row = [metric_name] + [metric.get(key, "") for key in headers[1:-1]] + [value]
+                row = (
+                    [metric_name]
+                    + [metric.get(key, "") for key in headers[1:-1]]
+                    + [value]
+                )
                 rows.append(row)
 
         elif result_type == "matrix":
@@ -5332,13 +5734,17 @@ def _format_as_table(results: List[Dict], result_type: str) -> str:
         table_lines = []
 
         # Header
-        header_line = " | ".join(header.ljust(col_widths[i]) for i, header in enumerate(headers))
+        header_line = " | ".join(
+            header.ljust(col_widths[i]) for i, header in enumerate(headers)
+        )
         table_lines.append(header_line)
         table_lines.append("-" * len(header_line))
 
         # Rows
         for row in rows:
-            row_line = " | ".join(str(row[i]).ljust(col_widths[i]) for i in range(len(headers)))
+            row_line = " | ".join(
+                str(row[i]).ljust(col_widths[i]) for i in range(len(headers))
+            )
             table_lines.append(row_line)
 
         return "\n".join(table_lines)
@@ -5362,7 +5768,9 @@ def _format_as_csv(results: List[Dict], result_type: str) -> str:
         if result_type == "vector":
             # Instant query results
             fieldnames = (
-                ["metric_name"] + list(results[0].get("metric", {}).keys()) + ["value", "timestamp"]
+                ["metric_name"]
+                + list(results[0].get("metric", {}).keys())
+                + ["value", "timestamp"]
             )
             writer = csv.DictWriter(output, fieldnames=fieldnames)
             writer.writeheader()
@@ -5403,7 +5811,11 @@ def _format_as_csv(results: List[Dict], result_type: str) -> str:
                     "namespace": metric.get("namespace", ""),
                 }
                 base_row.update(
-                    {k: v for k, v in metric.items() if k not in ["__name__", "namespace"]}
+                    {
+                        k: v
+                        for k, v in metric.items()
+                        if k not in ["__name__", "namespace"]
+                    }
                 )
 
                 for timestamp, value in values:
@@ -5434,7 +5846,8 @@ def _format_as_json(results: List[Dict], result_type: str) -> List[Dict]:
                     "value": value_data[1] if len(value_data) > 1 else None,
                     "timestamp": value_data[0] if len(value_data) > 0 else None,
                     "formatted_value": _format_metric_value(
-                        metric.get("__name__", ""), value_data[1] if len(value_data) > 1 else None
+                        metric.get("__name__", ""),
+                        value_data[1] if len(value_data) > 1 else None,
                     ),
                 }
 
@@ -5569,7 +5982,9 @@ def _generate_result_summary(results: List[Dict], result_type: str, query: str) 
                 metric_names.add(metric["__name__"])
 
         if metric_names:
-            summary_parts.append(f"Metric types: {', '.join(sorted(list(metric_names))[:3])}")
+            summary_parts.append(
+                f"Metric types: {', '.join(sorted(list(metric_names))[:3])}"
+            )
             if len(metric_names) > 3:
                 summary_parts[-1] += f" and {len(metric_names) - 3} more"
 
@@ -5594,7 +6009,10 @@ def _generate_query_suggestions(query: str, error_message: str) -> List[str]:
             ]
         )
 
-    if "unknown metric" in error_message.lower() or "not found" in error_message.lower():
+    if (
+        "unknown metric" in error_message.lower()
+        or "not found" in error_message.lower()
+    ):
         suggestions.extend(
             [
                 "Check if the metric name is spelled correctly",
@@ -5633,7 +6051,9 @@ def _generate_query_suggestions(query: str, error_message: str) -> List[str]:
     return suggestions
 
 
-def _generate_related_query_suggestions(original_query: str, results: List[Dict]) -> List[str]:
+def _generate_related_query_suggestions(
+    original_query: str, results: List[Dict]
+) -> List[str]:
     """Generate suggestions for related queries based on results."""
     suggestions = []
 
@@ -5743,7 +6163,10 @@ async def prometheus_query(
                 "execution_time": 0,
                 "result_count": 0,
                 "data": [],
-                "suggestions": ["Provide a valid PromQL query", 'Example: up{job="node-exporter"}'],
+                "suggestions": [
+                    "Provide a valid PromQL query",
+                    'Example: up{job="node-exporter"}',
+                ],
                 "errors": ["Empty query provided"],
             }
 
@@ -5853,11 +6276,18 @@ async def prometheus_query(
 
                 if response.status == 200:
                     response_data = await response.json()
-                    logger.info(f"[{tool_name}] Query executed successfully in {execution_time}ms")
+                    logger.info(
+                        f"[{tool_name}] Query executed successfully in {execution_time}ms"
+                    )
 
                     # Process results
                     processed_results = await _process_prometheus_results(
-                        response_data, format, namespace_filter, limit, query, query_type
+                        response_data,
+                        format,
+                        namespace_filter,
+                        limit,
+                        query,
+                        query_type,
                     )
 
                     # Add execution metadata
@@ -5933,7 +6363,9 @@ async def prometheus_query(
 
                 else:
                     error_text = await response.text()
-                    logger.error(f"[{tool_name}] HTTP error {response.status}: {error_text}")
+                    logger.error(
+                        f"[{tool_name}] HTTP error {response.status}: {error_text}"
+                    )
                     return {
                         "status": "error",
                         "error_type": "http_error",
@@ -6051,7 +6483,9 @@ def _filter_analysis_for_synthesis(
         logger.warning(f"Error filtering analysis: {e}")
         # Fallback: return minimal data
         return {
-            "summary": pod_analysis.get("summary", "Analysis available but filtered due to size"),
+            "summary": pod_analysis.get(
+                "summary", "Analysis available but filtered due to size"
+            ),
             "metadata": {"filtered": True, "reason": "token_overflow_prevention"},
         }
 
@@ -6083,7 +6517,10 @@ def _compress_events_for_synthesis(events_result: Dict[str, Any]) -> Dict[str, A
             # Sort by severity and relevance, keep top 5
             sorted_events = sorted(
                 events_result["events"],
-                key=lambda e: (e.get("severity") == "CRITICAL", e.get("relevance_score", 0)),
+                key=lambda e: (
+                    e.get("severity") == "CRITICAL",
+                    e.get("relevance_score", 0),
+                ),
                 reverse=True,
             )
             compressed["critical_events"] = sorted_events[:5]
@@ -6104,7 +6541,10 @@ def _compress_events_for_synthesis(events_result: Dict[str, Any]) -> Dict[str, A
 
     except Exception as e:
         logger.warning(f"Error compressing events: {e}")
-        return {"compressed": True, "total_events": events_result.get("total_events", 0)}
+        return {
+            "compressed": True,
+            "total_events": events_result.get("total_events", 0),
+        }
 
 
 async def _quick_volume_estimate(namespace: str, pod_name: str) -> int:
@@ -6225,7 +6665,9 @@ def clean_etcd_logs(raw_logs: str) -> str:
 
                         # Create a cleaner log format
                         # Use etcd timestamp if available, otherwise use k8s timestamp
-                        timestamp_to_use = etcd_timestamp if etcd_timestamp else k8s_timestamp
+                        timestamp_to_use = (
+                            etcd_timestamp if etcd_timestamp else k8s_timestamp
+                        )
 
                         # Build formatted log entry
                         formatted_parts = []
@@ -6240,7 +6682,10 @@ def clean_etcd_logs(raw_logs: str) -> str:
 
                         # Add other important fields if present
                         for key, value in json_obj.items():
-                            if key not in ["level", "ts", "caller", "msg"] and value is not None:
+                            if (
+                                key not in ["level", "ts", "caller", "msg"]
+                                and value is not None
+                            ):
                                 if isinstance(value, (str, int, float, bool)):
                                     formatted_parts.append(f"{key}={value}")
                                 else:
@@ -6251,7 +6696,9 @@ def clean_etcd_logs(raw_logs: str) -> str:
 
                     except json.JSONDecodeError:
                         # If JSON parsing fails, just clean up the escaping and use as-is
-                        cleaned_line = json_part.replace('\\"', '"').replace("\\n", "\n")
+                        cleaned_line = json_part.replace('\\"', '"').replace(
+                            "\\n", "\n"
+                        )
                         if k8s_timestamp:
                             cleaned_line = f"[{k8s_timestamp}] {cleaned_line}"
                         cleaned_lines.append(cleaned_line)
@@ -6344,13 +6791,19 @@ def _handle_api_exception(
             f"Required: pods/list, pods/log permissions"
         )
     elif e.status == 401:
-        logger.error(f"[{tool_name}] {strategy} strategy: 401 Unauthorized - authentication failed")
+        logger.error(
+            f"[{tool_name}] {strategy} strategy: 401 Unauthorized - authentication failed"
+        )
         results_dict[f"error_{strategy_lower}_401"] = (
             "Authentication failed. Check kubeconfig and credentials"
         )
     else:
-        logger.error(f"[{tool_name}] {strategy} strategy: API error {e.status} - {e.reason}")
-        results_dict[f"error_{strategy_lower}_api"] = f"API error {e.status}: {e.reason}"
+        logger.error(
+            f"[{tool_name}] {strategy} strategy: API error {e.status} - {e.reason}"
+        )
+        results_dict[f"error_{strategy_lower}_api"] = (
+            f"API error {e.status}: {e.reason}"
+        )
 
 
 def _get_logs_with_k8s_client(
@@ -6420,7 +6873,8 @@ def _get_logs_with_k8s_client(
                 if (
                     container_name == "etcd"
                     and (
-                        "etcd" in pod_name.lower() or namespace in ["openshift-etcd", "kube-system"]
+                        "etcd" in pod_name.lower()
+                        or namespace in ["openshift-etcd", "kube-system"]
                     )
                     and log_params.get("clean_logs", True)
                 ):
@@ -6442,7 +6896,9 @@ def _get_logs_with_k8s_client(
                 logger.info(f"No logs found for pod '{pod_name}' with current criteria")
 
         except ApiException as e:
-            error_message = f"API error fetching logs for pod '{pod_name}': {e.status} - {e.reason}"
+            error_message = (
+                f"API error fetching logs for pod '{pod_name}': {e.status} - {e.reason}"
+            )
             if e.body:
                 error_message += f" | Details: {str(e.body)[:200]}"
 
@@ -6450,7 +6906,9 @@ def _get_logs_with_k8s_client(
             target_logs_dict[pod_name] = f"ERROR: {error_message}"
 
         except Exception as e:
-            error_message = f"Unexpected error fetching logs for pod '{pod_name}': {str(e)}"
+            error_message = (
+                f"Unexpected error fetching logs for pod '{pod_name}': {str(e)}"
+            )
             logger.error(error_message, exc_info=True)
             target_logs_dict[pod_name] = f"ERROR: {error_message}"
 
@@ -6485,7 +6943,9 @@ def _filter_logs_by_time_range(logs: str, until_time: datetime) -> str:
                 # Handle different timestamp formats
                 if "T" in timestamp_match:
                     # ISO format
-                    log_time = datetime.fromisoformat(timestamp_match.replace("Z", "+00:00"))
+                    log_time = datetime.fromisoformat(
+                        timestamp_match.replace("Z", "+00:00")
+                    )
                 else:
                     # Try parsing date-time format
                     try:
@@ -6574,12 +7034,16 @@ async def smart_summarize_pod_logs(
 
     # Validate input parameters
     if not namespace or not isinstance(namespace, str):
-        error_msg = f"Invalid namespace parameter: {namespace}. Must be a non-empty string."
+        error_msg = (
+            f"Invalid namespace parameter: {namespace}. Must be a non-empty string."
+        )
         logger.error(f"[{tool_name}] {error_msg}")
         return {"error": error_msg}
 
     if not pod_name or not isinstance(pod_name, str):
-        error_msg = f"Invalid pod_name parameter: {pod_name}. Must be a non-empty string."
+        error_msg = (
+            f"Invalid pod_name parameter: {pod_name}. Must be a non-empty string."
+        )
         logger.error(f"[{tool_name}] {error_msg}")
         return {"error": error_msg}
 
@@ -6590,11 +7054,15 @@ async def smart_summarize_pod_logs(
         summary_level = "detailed"
 
     if time_segments <= 0:
-        logger.warning(f"[{tool_name}] Invalid time_segments '{time_segments}', defaulting to 10")
+        logger.warning(
+            f"[{tool_name}] Invalid time_segments '{time_segments}', defaulting to 10"
+        )
         time_segments = 10
 
     if max_context_tokens < 500:
-        logger.warning(f"[{tool_name}] Very low token limit ({max_context_tokens}), minimum is 500")
+        logger.warning(
+            f"[{tool_name}] Very low token limit ({max_context_tokens}), minimum is 500"
+        )
         max_context_tokens = 500
 
     try:
@@ -6612,7 +7080,9 @@ async def smart_summarize_pod_logs(
 
         if not user_specified_constraints:
             # ADAPTIVE MODE: No user constraints specified
-            logger.info(f"[{tool_name}] No time constraints specified - activating ADAPTIVE MODE")
+            logger.info(
+                f"[{tool_name}] No time constraints specified - activating ADAPTIVE MODE"
+            )
 
             volume_estimate = await _quick_volume_estimate(namespace, pod_name)
 
@@ -6669,7 +7139,9 @@ async def smart_summarize_pod_logs(
                 f"[{tool_name}] Small token budget detected ({max_context_tokens}), limiting to {log_params['tail_lines']} lines"
             )
 
-        raw_logs = await get_pod_logs(namespace=namespace, pod_name=pod_name, **log_params)
+        raw_logs = await get_pod_logs(
+            namespace=namespace, pod_name=pod_name, **log_params
+        )
 
         if "error" in raw_logs:
             return {"error": f"Failed to retrieve logs: {raw_logs['error']}"}
@@ -6741,7 +7213,11 @@ async def smart_summarize_pod_logs(
 
         # Add very limited samples from each focus area
         for area in focus_areas:
-            if area in patterns and patterns[area] and current_tokens < available_tokens:
+            if (
+                area in patterns
+                and patterns[area]
+                and current_tokens < available_tokens
+            ):
                 samples = []
                 # Limit to max 3 samples per area and truncate long messages
                 for item in patterns[area][:3]:
@@ -6776,7 +7252,9 @@ async def smart_summarize_pod_logs(
         # Step 8: Compile final results
         results = {
             "summary": summary,
-            "patterns": {k: v for k, v in patterns.items() if v},  # Only non-empty patterns
+            "patterns": {
+                k: v for k, v in patterns.items() if v
+            },  # Only non-empty patterns
             "time_segments": {
                 "segment_count": len(time_samples),
                 "lines_per_segment": {k: len(v) for k, v in time_samples.items()},
@@ -6802,7 +7280,9 @@ async def smart_summarize_pod_logs(
             },
         }
 
-        logger.info(f"[{tool_name}] Analysis completed successfully in {processing_time:.2f}s")
+        logger.info(
+            f"[{tool_name}] Analysis completed successfully in {processing_time:.2f}s"
+        )
         logger.info(
             f"[{tool_name}] Found {results['metadata']['processing_metrics']['patterns_extracted']} pattern matches"
         )
@@ -6831,7 +7311,9 @@ async def smart_summarize_pod_logs(
 
 @mcp.tool()
 async def investigate_tls_certificate_issues(
-    time_range: str = "24h", max_namespaces: int = 20, focus_on_system_namespaces: bool = True
+    time_range: str = "24h",
+    max_namespaces: int = 20,
+    focus_on_system_namespaces: bool = True,
 ) -> Dict[str, Any]:
     """
     Investigate TLS/certificate issues across the cluster with targeted search and analysis.
@@ -6884,7 +7366,9 @@ async def investigate_tls_certificate_issues(
         else:
             target_namespaces = all_namespaces[:max_namespaces]
 
-        logger.info(f"[{tool_name}] Searching {len(target_namespaces)} namespaces for TLS issues")
+        logger.info(
+            f"[{tool_name}] Searching {len(target_namespaces)} namespaces for TLS issues"
+        )
 
         # Search for TLS issues across target namespaces
         tls_issues = []
@@ -6945,7 +7429,9 @@ async def investigate_tls_certificate_issues(
                                         {
                                             "namespace": namespace,
                                             "pod_name": pod_name,
-                                            "pod_status": pod_info.get("status", "Unknown"),
+                                            "pod_status": pod_info.get(
+                                                "status", "Unknown"
+                                            ),
                                             "tls_errors": len(tls_related_errors),
                                             "sample_error": tls_related_errors[0].get(
                                                 "content", ""
@@ -6959,7 +7445,9 @@ async def investigate_tls_certificate_issues(
                                     )
 
                         except Exception as e:
-                            logger.debug(f"Error analyzing pod {pod_name} in {namespace}: {e}")
+                            logger.debug(
+                                f"Error analyzing pod {pod_name} in {namespace}: {e}"
+                            )
                             continue
 
                 # Also check namespace events for certificate-related events
@@ -6975,7 +7463,13 @@ async def investigate_tls_certificate_issues(
                         for event in events_result["events"][:5]:  # Top 5 events
                             event_content = event.get("event_string", "").lower()
 
-                            tls_patterns = ["certificate", "tls", "x509", "ssl", "handshake"]
+                            tls_patterns = [
+                                "certificate",
+                                "tls",
+                                "x509",
+                                "ssl",
+                                "handshake",
+                            ]
                             matched_pattern = None
                             for pattern in tls_patterns:
                                 if pattern in event_content:
@@ -6988,7 +7482,8 @@ async def investigate_tls_certificate_issues(
                                         "namespace": namespace,
                                         "event_type": "kubernetes_event",
                                         "severity": event.get("severity", "UNKNOWN"),
-                                        "content": event.get("event_string", "")[:200] + "...",
+                                        "content": event.get("event_string", "")[:200]
+                                        + "...",
                                         "timestamp": event.get("timestamp", "unknown"),
                                     }
                                 )
@@ -7022,21 +7517,29 @@ async def investigate_tls_certificate_issues(
             recommendations.append(
                 f"Found {total_issues} TLS-related issues across {total_affected_pods} pods"
             )
-            recommendations.append("Check certificate expiration dates and CA trust chains")
+            recommendations.append(
+                "Check certificate expiration dates and CA trust chains"
+            )
             recommendations.append("Verify service mesh and ingress TLS configurations")
 
-            if any("expired" in issue.get("content", "").lower() for issue in tls_issues):
+            if any(
+                "expired" in issue.get("content", "").lower() for issue in tls_issues
+            ):
                 recommendations.append(
                     "Certificate expiration detected - immediate renewal required"
                 )
 
-            if any("authority" in issue.get("content", "").lower() for issue in tls_issues):
+            if any(
+                "authority" in issue.get("content", "").lower() for issue in tls_issues
+            ):
                 recommendations.append(
                     "Certificate authority issues detected - check CA trust store"
                 )
 
         else:
-            recommendations.append("No TLS certificate issues found in searched namespaces")
+            recommendations.append(
+                "No TLS certificate issues found in searched namespaces"
+            )
 
         if total_affected_pods > 5:
             recommendations.append(
@@ -7057,7 +7560,9 @@ async def investigate_tls_certificate_issues(
         }
 
     except Exception as e:
-        logger.error(f"[{tool_name}] Error in TLS investigation: {str(e)}", exc_info=True)
+        logger.error(
+            f"[{tool_name}] Error in TLS investigation: {str(e)}", exc_info=True
+        )
         return {
             "error": f"TLS investigation failed: {str(e)}",
             "suggestion": "Try using direct pod log analysis for specific pods with TLS issues",
@@ -7196,15 +7701,21 @@ async def conservative_namespace_overview(
                         "patterns_found": pod_analysis.get("metadata", {})
                         .get("processing_metrics", {})
                         .get("patterns_extracted", 0),
-                        "has_errors": bool(pod_analysis.get("patterns", {}).get("errors")),
-                        "has_warnings": bool(pod_analysis.get("patterns", {}).get("warnings")),
+                        "has_errors": bool(
+                            pod_analysis.get("patterns", {}).get("errors")
+                        ),
+                        "has_warnings": bool(
+                            pod_analysis.get("patterns", {}).get("warnings")
+                        ),
                     }
 
                     # Extract top issue if any
                     if pod_analysis.get("patterns", {}).get("errors"):
                         top_error = pod_analysis["patterns"]["errors"][0]
                         essential_info["top_issue"] = f"{top_error['content'][:80]}..."
-                        issues_found.append(f"Pod {pod_name}: {essential_info['top_issue']}")
+                        issues_found.append(
+                            f"Pod {pod_name}: {essential_info['top_issue']}"
+                        )
 
                     findings[pod_name] = essential_info
 
@@ -7222,7 +7733,11 @@ async def conservative_namespace_overview(
             "total_pods": total_pods,
             "pods_analyzed": len(findings),
             "pods_with_issues": len(
-                [f for f in findings.values() if f.get("has_errors") or f.get("has_warnings")]
+                [
+                    f
+                    for f in findings.values()
+                    if f.get("has_errors") or f.get("has_warnings")
+                ]
             ),
             "critical_issues_found": len(issues_found),
             "analysis_strategy": f"conservative sampling of {min(max_pods, total_pods)}/{total_pods} pods",
@@ -7231,7 +7746,9 @@ async def conservative_namespace_overview(
         # Generate focused recommendations
         recommendations = []
         if issues_found:
-            recommendations.append(f"Found {len(issues_found)} issues requiring investigation")
+            recommendations.append(
+                f"Found {len(issues_found)} issues requiring investigation"
+            )
             recommendations.extend(issues_found[:5])  # Top 5 issues only
         else:
             recommendations.append("No critical issues detected in sampled pods")
@@ -7255,7 +7772,9 @@ async def conservative_namespace_overview(
         }
 
     except Exception as e:
-        logger.error(f"[{tool_name}] Error in conservative analysis: {str(e)}", exc_info=True)
+        logger.error(
+            f"[{tool_name}] Error in conservative analysis: {str(e)}", exc_info=True
+        )
         return {
             "error": f"Conservative analysis failed: {str(e)}",
             "namespace": namespace,
@@ -7305,16 +7824,22 @@ async def adaptive_namespace_investigation(
 
     try:
         tool_name = "adaptive_namespace_investigation"
-        logger.info(f"[{tool_name}] Starting adaptive investigation of namespace '{namespace}'")
+        logger.info(
+            f"[{tool_name}] Starting adaptive investigation of namespace '{namespace}'"
+        )
         logger.info(f"[{tool_name}] Query: {investigation_query}")
-        logger.info(f"[{tool_name}] Token budget: {token_budget:,}, Max pods: {max_pods}")
+        logger.info(
+            f"[{tool_name}] Token budget: {token_budget:,}, Max pods: {max_pods}"
+        )
 
         # Initialize adaptive processor with specified budget
         processor = AdaptiveLogProcessor(max_token_budget=token_budget)
 
         # Phase 1: Smart Discovery (10% of budget)
         discovery_budget = int(token_budget * 0.1)
-        logger.info(f"[{tool_name}] Phase 1: Discovery (budget: {discovery_budget:,} tokens)")
+        logger.info(
+            f"[{tool_name}] Phase 1: Discovery (budget: {discovery_budget:,} tokens)"
+        )
 
         # Get all pods in namespace
         pods_info = await list_pods_in_namespace(namespace)
@@ -7336,7 +7861,9 @@ async def adaptive_namespace_investigation(
                 "pod_findings": {},
                 "namespace_events": {},
                 "critical_issues": [],
-                "recommendations": ["Verify namespace exists and has running workloads"],
+                "recommendations": [
+                    "Verify namespace exists and has running workloads"
+                ],
             }
 
         # Get namespace events for correlation (compressed for synthesis)
@@ -7361,7 +7888,9 @@ async def adaptive_namespace_investigation(
         # Phase 2: Intelligent Analysis (80% of budget)
         analysis_budget = int(token_budget * 0.8)
         per_pod_budget = (
-            analysis_budget // pods_to_analyze if pods_to_analyze > 0 else analysis_budget
+            analysis_budget // pods_to_analyze
+            if pods_to_analyze > 0
+            else analysis_budget
         )
 
         logger.info(
@@ -7392,7 +7921,9 @@ async def adaptive_namespace_investigation(
                     ),  # Container error states
                     p.get("restart_count", 0) > 0,  # Pods with restarts
                     p.get("restart_count", 0),  # Higher restart count = higher priority
-                    p.get("name", "").endswith(("-failed", "-error")),  # Names indicating issues
+                    p.get("name", "").endswith(
+                        ("-failed", "-error")
+                    ),  # Names indicating issues
                 ),
                 reverse=True,
             )
@@ -7439,17 +7970,23 @@ async def adaptive_namespace_investigation(
                 actual_batch_size = min(batch_size, len(pods_to_process) - batch_start)
                 batch_budget_needed = per_pod_budget * actual_batch_size
 
-                if not is_first_batch and not processor.can_process_more(batch_budget_needed):
+                if not is_first_batch and not processor.can_process_more(
+                    batch_budget_needed
+                ):
                     logger.info(
                         f"Token budget exhausted - analyzed {pods_analyzed}/{pods_to_analyze} pods"
                     )
                     break
 
                 batch = pods_to_process[batch_start : batch_start + batch_size]
-                logger.info(f"[{tool_name}] Processing batch of {len(batch)} pods in parallel")
+                logger.info(
+                    f"[{tool_name}] Processing batch of {len(batch)} pods in parallel"
+                )
 
                 # Run batch in parallel
-                batch_results = await asyncio.gather(*[analyze_single_pod(p) for p in batch])
+                batch_results = await asyncio.gather(
+                    *[analyze_single_pod(p) for p in batch]
+                )
 
                 # Process batch results
                 for result in batch_results:
@@ -7457,7 +7994,10 @@ async def adaptive_namespace_investigation(
                     pod_status = result["pod_status"]
 
                     if result["error"]:
-                        findings[pod_name] = {"status": pod_status, "error": result["error"]}
+                        findings[pod_name] = {
+                            "status": pod_status,
+                            "error": result["error"],
+                        }
                     elif result["analysis"] and "error" not in result["analysis"]:
                         # INTELLIGENT FILTERING: Only keep essential data to prevent token overflow
                         filtered_analysis = _filter_analysis_for_synthesis(
@@ -7477,7 +8017,9 @@ async def adaptive_namespace_investigation(
                             critical_issues.extend(
                                 [
                                     f"Pod {pod_name}: {error['content'][:100]}..."
-                                    for error in result["analysis"]["patterns"]["errors"][:2]
+                                    for error in result["analysis"]["patterns"][
+                                        "errors"
+                                    ][:2]
                                 ]
                             )
 
@@ -7495,16 +8037,22 @@ async def adaptive_namespace_investigation(
                     )  # At least 100 tokens per pod
                     pods_analyzed += 1
 
-                logger.info(f"[{tool_name}] Analyzed {pods_analyzed}/{pods_to_analyze} pods so far")
+                logger.info(
+                    f"[{tool_name}] Analyzed {pods_analyzed}/{pods_to_analyze} pods so far"
+                )
 
                 # Early termination if many critical issues found
                 if len(critical_issues) >= 10:
-                    logger.info(f"Early termination: {len(critical_issues)} critical issues found")
+                    logger.info(
+                        f"Early termination: {len(critical_issues)} critical issues found"
+                    )
                     break
 
         # Phase 3: Synthesis (10% of budget)
         synthesis_budget = int(token_budget * 0.1)
-        logger.info(f"[{tool_name}] Phase 3: Synthesis (budget: {synthesis_budget:,} tokens)")
+        logger.info(
+            f"[{tool_name}] Phase 3: Synthesis (budget: {synthesis_budget:,} tokens)"
+        )
 
         # Generate comprehensive summary
         investigation_summary = {
@@ -7553,7 +8101,9 @@ async def adaptive_namespace_investigation(
         }
 
     except Exception as e:
-        logger.error(f"[{tool_name}] Error in adaptive investigation: {str(e)}", exc_info=True)
+        logger.error(
+            f"[{tool_name}] Error in adaptive investigation: {str(e)}", exc_info=True
+        )
         return {
             "error": f"Adaptive investigation failed: {str(e)}",
             "namespace": namespace,
@@ -7610,7 +8160,9 @@ def get_etcd_logs(
     if since_time:
         try:
             # Validate RFC3339 timestamp format
-            parsed_since_time = datetime.fromisoformat(since_time.replace("Z", "+00:00"))
+            parsed_since_time = datetime.fromisoformat(
+                since_time.replace("Z", "+00:00")
+            )
         except ValueError as e:
             logger.error(f"[{tool_name}] Invalid since_time format: {since_time}")
             return {
@@ -7620,7 +8172,9 @@ def get_etcd_logs(
     if until_time:
         try:
             # Validate RFC3339 timestamp format
-            parsed_until_time = datetime.fromisoformat(until_time.replace("Z", "+00:00"))
+            parsed_until_time = datetime.fromisoformat(
+                until_time.replace("Z", "+00:00")
+            )
         except ValueError as e:
             logger.error(f"[{tool_name}] Invalid until_time format: {until_time}")
             return {
@@ -7644,7 +8198,11 @@ def get_etcd_logs(
             timestamps = True
 
         # Validate time range logic
-        if parsed_since_time and parsed_until_time and parsed_until_time <= parsed_since_time:
+        if (
+            parsed_since_time
+            and parsed_until_time
+            and parsed_until_time <= parsed_since_time
+        ):
             logger.error(f"[{tool_name}] until_time must be after since_time")
             return {
                 "critical_error": f"Invalid time range: until_time ({until_time}) must be after since_time ({since_time})"
@@ -7652,7 +8210,9 @@ def get_etcd_logs(
 
     if since_seconds is not None and since_seconds < 0:
         logger.error(f"[{tool_name}] Invalid since_seconds: {since_seconds}")
-        return {"critical_error": f"since_seconds must be non-negative, got: {since_seconds}"}
+        return {
+            "critical_error": f"since_seconds must be non-negative, got: {since_seconds}"
+        }
 
     if tail_lines is not None and tail_lines <= 0:
         logger.error(f"[{tool_name}] Invalid tail_lines: {tail_lines}")
@@ -7677,7 +8237,9 @@ def get_etcd_logs(
         )
         if pod_list_os.items:
             pod_names_os = [
-                pod.metadata.name for pod in pod_list_os.items if pod.metadata and pod.metadata.name
+                pod.metadata.name
+                for pod in pod_list_os.items
+                if pod.metadata and pod.metadata.name
             ]
             logger.info(
                 f"[{tool_name}] OpenShift strategy: Found {len(pod_names_os)} etcd pod(s). Fetching logs."
@@ -7703,9 +8265,13 @@ def get_etcd_logs(
             ):
                 # Apply time range filtering if until_time is specified
                 if parsed_until_time:
-                    logger.info(f"[{tool_name}] Applying time range filter: until {until_time}")
+                    logger.info(
+                        f"[{tool_name}] Applying time range filter: until {until_time}"
+                    )
                     for pod_name in list(accumulated_results.keys()):
-                        if not pod_name.startswith("error_") and not pod_name.startswith("info_"):
+                        if not pod_name.startswith(
+                            "error_"
+                        ) and not pod_name.startswith("info_"):
                             original_length = len(accumulated_results[pod_name])
                             accumulated_results[pod_name] = _filter_logs_by_time_range(
                                 accumulated_results[pod_name], parsed_until_time
@@ -7715,7 +8281,9 @@ def get_etcd_logs(
                                 f"[{tool_name}] Filtered logs for {pod_name}: {original_length} -> {filtered_length} characters"
                             )
 
-                logger.info(f"[{tool_name}] Successfully fetched logs using OpenShift strategy")
+                logger.info(
+                    f"[{tool_name}] Successfully fetched logs using OpenShift strategy"
+                )
                 logs_successfully_fetched = True
             else:
                 logger.warning(
@@ -7729,10 +8297,18 @@ def get_etcd_logs(
 
     except ApiException as e:
         _handle_api_exception(
-            e, tool_name, "OpenShift", os_namespace, os_label_selector, accumulated_results
+            e,
+            tool_name,
+            "OpenShift",
+            os_namespace,
+            os_label_selector,
+            accumulated_results,
         )
     except Exception as e:
-        logger.error(f"[{tool_name}] OpenShift strategy: Unexpected error: {str(e)}", exc_info=True)
+        logger.error(
+            f"[{tool_name}] OpenShift strategy: Unexpected error: {str(e)}",
+            exc_info=True,
+        )
         accumulated_results["error_openshift_unexpected"] = str(e)
 
     if logs_successfully_fetched:
@@ -7751,7 +8327,9 @@ def get_etcd_logs(
 
     try:
         pod_list_kube = k8s_core_api.list_namespaced_pod(
-            namespace=kube_namespace, label_selector=kube_label_selector, timeout_seconds=10
+            namespace=kube_namespace,
+            label_selector=kube_label_selector,
+            timeout_seconds=10,
         )
         if pod_list_kube.items:
             pod_names_kube = [
@@ -7783,9 +8361,13 @@ def get_etcd_logs(
             ):
                 # Apply time range filtering if until_time is specified
                 if parsed_until_time:
-                    logger.info(f"[{tool_name}] Applying time range filter: until {until_time}")
+                    logger.info(
+                        f"[{tool_name}] Applying time range filter: until {until_time}"
+                    )
                     for pod_name in list(standard_k8s_results.keys()):
-                        if not pod_name.startswith("error_") and not pod_name.startswith("info_"):
+                        if not pod_name.startswith(
+                            "error_"
+                        ) and not pod_name.startswith("info_"):
                             original_length = len(standard_k8s_results[pod_name])
                             standard_k8s_results[pod_name] = _filter_logs_by_time_range(
                                 standard_k8s_results[pod_name], parsed_until_time
@@ -7812,17 +8394,24 @@ def get_etcd_logs(
 
     except ApiException as e:
         _handle_api_exception(
-            e, tool_name, "StandardK8s", kube_namespace, kube_label_selector, accumulated_results
+            e,
+            tool_name,
+            "StandardK8s",
+            kube_namespace,
+            kube_label_selector,
+            accumulated_results,
         )
     except Exception as e:
         logger.error(
-            f"[{tool_name}] Standard K8s strategy: Unexpected error: {str(e)}", exc_info=True
+            f"[{tool_name}] Standard K8s strategy: Unexpected error: {str(e)}",
+            exc_info=True,
         )
         accumulated_results["error_kube_unexpected"] = str(e)
 
     # Final summary
     has_actual_logs = any(
-        not key.startswith(("error_", "info_", "critical_")) for key in accumulated_results
+        not key.startswith(("error_", "info_", "critical_"))
+        for key in accumulated_results
     )
 
     if not has_actual_logs:
@@ -7840,7 +8429,9 @@ def get_etcd_logs(
             final_results.update(accumulated_results)
             accumulated_results = final_results
 
-    logger.info(f"[{tool_name}] Log fetching complete. Results: {len(accumulated_results)} entries")
+    logger.info(
+        f"[{tool_name}] Log fetching complete. Results: {len(accumulated_results)} entries"
+    )
     return accumulated_results
 
 
@@ -7898,12 +8489,16 @@ async def stream_analyze_pod_logs(
 
     # Validate input parameters
     if not namespace or not isinstance(namespace, str):
-        error_msg = f"Invalid namespace parameter: {namespace}. Must be a non-empty string."
+        error_msg = (
+            f"Invalid namespace parameter: {namespace}. Must be a non-empty string."
+        )
         logger.error(f"[{tool_name}] {error_msg}")
         return {"error": error_msg}
 
     if not pod_name or not isinstance(pod_name, str):
-        error_msg = f"Invalid pod_name parameter: {pod_name}. Must be a non-empty string."
+        error_msg = (
+            f"Invalid pod_name parameter: {pod_name}. Must be a non-empty string."
+        )
         logger.error(f"[{tool_name}] {error_msg}")
         return {"error": error_msg}
 
@@ -7926,7 +8521,9 @@ async def stream_analyze_pod_logs(
 
     try:
         # Initialize stream processor
-        processor = LogStreamProcessor(chunk_size=chunk_size, analysis_mode=analysis_mode)
+        processor = LogStreamProcessor(
+            chunk_size=chunk_size, analysis_mode=analysis_mode
+        )
 
         # Parse time parameters with enhanced support (prioritize new parameters over legacy time_window)
         if time_period or start_time or end_time or since_seconds:
@@ -7948,9 +8545,13 @@ async def stream_analyze_pod_logs(
                 time_mapping = {"1h": 3600, "6h": 21600, "24h": 86400, "1d": 86400}
                 if time_window in time_mapping:
                     log_params["since_seconds"] = time_mapping[time_window]
-                    logger.info(f"[{tool_name}] Using legacy time_window: {time_window}")
+                    logger.info(
+                        f"[{tool_name}] Using legacy time_window: {time_window}"
+                    )
                 else:
-                    logger.warning(f"[{tool_name}] Unknown time_window '{time_window}', ignoring")
+                    logger.warning(
+                        f"[{tool_name}] Unknown time_window '{time_window}', ignoring"
+                    )
 
         # Handle tail_lines parameter
         if tail_lines is not None:
@@ -7964,7 +8565,9 @@ async def stream_analyze_pod_logs(
 
         # Retrieve logs
         logger.info(f"[{tool_name}] Retrieving logs from pod '{pod_name}'")
-        raw_logs = await get_pod_logs(namespace=namespace, pod_name=pod_name, **log_params)
+        raw_logs = await get_pod_logs(
+            namespace=namespace, pod_name=pod_name, **log_params
+        )
 
         if "error" in raw_logs:
             return {"error": f"Failed to retrieve logs: {raw_logs['error']}"}
@@ -8014,7 +8617,9 @@ async def stream_analyze_pod_logs(
 
         for line in all_log_lines:
             if chunks_processed >= max_chunks:
-                logger.info(f"[{tool_name}] Reached max_chunks limit ({max_chunks}), stopping")
+                logger.info(
+                    f"[{tool_name}] Reached max_chunks limit ({max_chunks}), stopping"
+                )
                 break
 
             chunk_result = processor.add_line(line)
@@ -8036,7 +8641,9 @@ async def stream_analyze_pod_logs(
         # Generate overall summary and trending analysis
         overall_summary = generate_streaming_summary(chunk_results)
         trending_patterns = analyze_trending_patterns(chunk_results)
-        recommendations = generate_streaming_recommendations(overall_summary, trending_patterns)
+        recommendations = generate_streaming_recommendations(
+            overall_summary, trending_patterns
+        )
 
         # Calculate processing metrics
         processing_time = time.time() - start_timestamp
@@ -8068,7 +8675,9 @@ async def stream_analyze_pod_logs(
             },
         }
 
-        logger.info(f"[{tool_name}] Streaming analysis completed in {processing_time:.2f}s")
+        logger.info(
+            f"[{tool_name}] Streaming analysis completed in {processing_time:.2f}s"
+        )
         logger.info(
             f"[{tool_name}] Processed {chunks_processed} chunks with {overall_summary.get('total_issues', 0)} total issues"
         )
@@ -8138,19 +8747,25 @@ async def analyze_pod_logs_hybrid(
 
     # Validate input parameters
     if not namespace or not isinstance(namespace, str):
-        error_msg = f"Invalid namespace parameter: {namespace}. Must be a non-empty string."
+        error_msg = (
+            f"Invalid namespace parameter: {namespace}. Must be a non-empty string."
+        )
         logger.error(f"[{tool_name}] {error_msg}")
         return {"error": error_msg}
 
     if not pod_name or not isinstance(pod_name, str):
-        error_msg = f"Invalid pod_name parameter: {pod_name}. Must be a non-empty string."
+        error_msg = (
+            f"Invalid pod_name parameter: {pod_name}. Must be a non-empty string."
+        )
         logger.error(f"[{tool_name}] {error_msg}")
         return {"error": error_msg}
 
     # Normalize parameters
     valid_strategies = ["auto", "smart_summary", "streaming", "hybrid"]
     if strategy not in valid_strategies:
-        logger.warning(f"[{tool_name}] Invalid strategy '{strategy}', defaulting to 'auto'")
+        logger.warning(
+            f"[{tool_name}] Invalid strategy '{strategy}', defaulting to 'auto'"
+        )
         strategy = "auto"
 
     valid_request_types = ["investigation", "troubleshooting", "monitoring"]
@@ -8162,7 +8777,9 @@ async def analyze_pod_logs_hybrid(
 
     valid_urgency_levels = ["low", "medium", "high", "critical"]
     if urgency not in valid_urgency_levels:
-        logger.warning(f"[{tool_name}] Invalid urgency '{urgency}', defaulting to 'medium'")
+        logger.warning(
+            f"[{tool_name}] Invalid urgency '{urgency}', defaulting to 'medium'"
+        )
         urgency = "medium"
 
     try:
@@ -8206,7 +8823,9 @@ async def analyze_pod_logs_hybrid(
                 LogAnalysisStrategy.SMART_SUMMARY,
                 LogAnalysisStrategy.STREAMING,
             ]
-            selected_strategy = StrategySelector.select_strategy(context, available_strategies)
+            selected_strategy = StrategySelector.select_strategy(
+                context, available_strategies
+            )
         else:
             strategy_mapping = {
                 "smart_summary": LogAnalysisStrategy.SMART_SUMMARY,
@@ -8223,7 +8842,11 @@ async def analyze_pod_logs_hybrid(
         # Prepare strategy-specific parameters
         strategy_params = custom_params.copy() if custom_params else {}
         strategy_params.update(
-            {"namespace": namespace, "pod_name": pod_name, "container_name": container_name}
+            {
+                "namespace": namespace,
+                "pod_name": pod_name,
+                "container_name": container_name,
+            }
         )
 
         # Execute primary strategy
@@ -8234,7 +8857,11 @@ async def analyze_pod_logs_hybrid(
             # Configure smart summary based on context
             if urgency in ["high", "critical"]:
                 strategy_params.update(
-                    {"summary_level": "brief", "max_context_tokens": 5000, "time_segments": 3}
+                    {
+                        "summary_level": "brief",
+                        "max_context_tokens": 5000,
+                        "time_segments": 3,
+                    }
                 )
             elif urgency == "low":
                 strategy_params.update(
@@ -8246,7 +8873,11 @@ async def analyze_pod_logs_hybrid(
                 )
             else:
                 strategy_params.update(
-                    {"summary_level": "detailed", "max_context_tokens": 8000, "time_segments": 5}
+                    {
+                        "summary_level": "detailed",
+                        "max_context_tokens": 8000,
+                        "time_segments": 5,
+                    }
                 )
 
             primary_results = await smart_summarize_pod_logs(**strategy_params)
@@ -8255,15 +8886,27 @@ async def analyze_pod_logs_hybrid(
             # Configure streaming based on context
             if urgency == "critical":
                 strategy_params.update(
-                    {"chunk_size": 1000, "analysis_mode": "errors_only", "max_chunks": 20}
+                    {
+                        "chunk_size": 1000,
+                        "analysis_mode": "errors_only",
+                        "max_chunks": 20,
+                    }
                 )
             elif request_type == "troubleshooting":
                 strategy_params.update(
-                    {"chunk_size": 3000, "analysis_mode": "errors_and_warnings", "max_chunks": 30}
+                    {
+                        "chunk_size": 3000,
+                        "analysis_mode": "errors_and_warnings",
+                        "max_chunks": 30,
+                    }
                 )
             else:
                 strategy_params.update(
-                    {"chunk_size": 5000, "analysis_mode": "full_analysis", "max_chunks": 50}
+                    {
+                        "chunk_size": 5000,
+                        "analysis_mode": "full_analysis",
+                        "max_chunks": 50,
+                    }
                 )
 
             primary_results = await stream_analyze_pod_logs(**strategy_params)
@@ -8272,12 +8915,20 @@ async def analyze_pod_logs_hybrid(
             # Run both strategies and combine results
             summary_params = strategy_params.copy()
             summary_params.update(
-                {"summary_level": "detailed", "max_context_tokens": 20000, "time_segments": 8}
+                {
+                    "summary_level": "detailed",
+                    "max_context_tokens": 20000,
+                    "time_segments": 8,
+                }
             )
 
             streaming_params = strategy_params.copy()
             streaming_params.update(
-                {"chunk_size": 4000, "analysis_mode": "errors_and_warnings", "max_chunks": 25}
+                {
+                    "chunk_size": 4000,
+                    "analysis_mode": "errors_and_warnings",
+                    "max_chunks": 25,
+                }
             )
 
             # Run both analyses
@@ -8290,18 +8941,24 @@ async def analyze_pod_logs_hybrid(
                     "summary_analysis": summary_result,
                     "streaming_analysis": streaming_result,
                 },
-                "hybrid_insights": combine_analysis_results(summary_result, streaming_result),
+                "hybrid_insights": combine_analysis_results(
+                    summary_result, streaming_result
+                ),
             }
 
         # Generate supplementary insights based on primary results
-        supplementary_results = generate_supplementary_insights(primary_results, context)
+        supplementary_results = generate_supplementary_insights(
+            primary_results, context
+        )
 
         # Generate performance metrics
         processing_time = time.time() - start_timestamp
         performance_metrics = {
             "processing_time_seconds": round(processing_time, 2),
             "strategy_selected": selected_strategy.value,
-            "strategy_selection_reason": get_strategy_selection_reason(context, selected_strategy),
+            "strategy_selection_reason": get_strategy_selection_reason(
+                context, selected_strategy
+            ),
             "log_size_estimate": log_size_estimate,
             "cache_enabled": use_cache,
         }
@@ -8385,7 +9042,9 @@ async def progressive_event_analysis(
         focus_areas = ["errors", "warnings", "failures"]
 
     tool_name = "progressive_event_analysis"
-    logger.info(f"[{tool_name}] Starting {analysis_level} analysis for namespace '{namespace}'")
+    logger.info(
+        f"[{tool_name}] Starting {analysis_level} analysis for namespace '{namespace}'"
+    )
 
     try:
         # First get events using smart handler
@@ -8478,7 +9137,9 @@ async def progressive_event_analysis(
             analysis_result["overview"] = analyzer.get_overview()
 
         elif analysis_level == "detailed":
-            analysis_result["detailed_analysis"] = analyzer.get_detailed_analysis(event_filters)
+            analysis_result["detailed_analysis"] = analyzer.get_detailed_analysis(
+                event_filters
+            )
 
         elif analysis_level == "correlation":
             analysis_result["correlation_analysis"] = analyzer.get_correlation_analysis(
@@ -8487,7 +9148,9 @@ async def progressive_event_analysis(
 
         elif analysis_level == "deep_dive":
             analysis_result["overview"] = analyzer.get_overview()
-            analysis_result["detailed_analysis"] = analyzer.get_detailed_analysis(event_filters)
+            analysis_result["detailed_analysis"] = analyzer.get_detailed_analysis(
+                event_filters
+            )
             analysis_result["correlation_analysis"] = analyzer.get_correlation_analysis(
                 seed_event_id
             )
@@ -8504,7 +9167,9 @@ async def progressive_event_analysis(
         return analysis_result
 
     except Exception as e:
-        logger.error(f"[{tool_name}] Error in progressive analysis: {str(e)}", exc_info=True)
+        logger.error(
+            f"[{tool_name}] Error in progressive analysis: {str(e)}", exc_info=True
+        )
         return {
             "error": f"Progressive analysis failed: {str(e)}",
             "suggestion": "Try a simpler analysis level like 'overview'",
@@ -8546,11 +9211,17 @@ async def advanced_event_analytics(
             "error": f"Invalid analysis_depth '{analysis_depth}'. Must be one of: {', '.join(sorted(valid_depths))}"
         }
 
-    logger.info(f"[{tool_name}] Starting advanced analytics for namespace '{namespace}'")
+    logger.info(
+        f"[{tool_name}] Starting advanced analytics for namespace '{namespace}'"
+    )
 
     try:
         # Step 1: Get base event data — scale progressive analysis to depth
-        depth_to_level = {"basic": "overview", "comprehensive": "detailed", "deep": "deep_dive"}
+        depth_to_level = {
+            "basic": "overview",
+            "comprehensive": "detailed",
+            "deep": "deep_dive",
+        }
         base_level = depth_to_level.get(analysis_depth, "detailed")
         base_result = await progressive_event_analysis(
             namespace=namespace, analysis_level=base_level, time_period=time_period
@@ -8599,22 +9270,29 @@ async def advanced_event_analytics(
                     fallback_result["log_correlation"] = log_correlation
                     has_fallback_data = True
                 except Exception as e:
-                    logger.warning(f"[{tool_name}] Log correlation fallback failed: {e}")
+                    logger.warning(
+                        f"[{tool_name}] Log correlation fallback failed: {e}"
+                    )
 
             if include_metrics_correlation:
                 try:
                     if not include_log_correlation:
                         log_integrator = LogMetricsIntegrator([])
-                    metrics_correlation = await log_integrator.correlate_with_metrics(namespace)
+                    metrics_correlation = await log_integrator.correlate_with_metrics(
+                        namespace
+                    )
                     fallback_result["metrics_correlation"] = metrics_correlation
                     has_fallback_data = True
                 except Exception as e:
-                    logger.warning(f"[{tool_name}] Metrics correlation fallback failed: {e}")
+                    logger.warning(
+                        f"[{tool_name}] Metrics correlation fallback failed: {e}"
+                    )
 
             if include_runbook_suggestions:
                 fallback_result["runbook_suggestions"] = [
                     "No events detected — check if event generation is working in this namespace",
-                    "Verify namespace has active workloads: kubectl get pods -n " + namespace,
+                    "Verify namespace has active workloads: kubectl get pods -n "
+                    + namespace,
                     "Check if events are being garbage collected prematurely",
                 ]
                 has_fallback_data = True
@@ -8623,7 +9301,9 @@ async def advanced_event_analytics(
                 fallback_result["message"] = (
                     "No events available and fallback analysis produced no data"
                 )
-                fallback_result["suggestion"] = "Try a longer time period or different namespace"
+                fallback_result["suggestion"] = (
+                    "Try a longer time period or different namespace"
+                )
 
             return fallback_result
 
@@ -8674,21 +9354,23 @@ async def advanced_event_analytics(
             analytics_result["runbook_suggestions"] = runbook_suggestions
 
         # Step 6: Generate comprehensive insights
-        analytics_result["comprehensive_insights"] = await generate_comprehensive_insights(
-            analytics_result, analysis_depth
-        )
+        analytics_result[
+            "comprehensive_insights"
+        ] = await generate_comprehensive_insights(analytics_result, analysis_depth)
 
         # Step 7: Risk assessment and recommendations
         analytics_result["risk_assessment"] = assess_overall_risk(analytics_result)
-        analytics_result["strategic_recommendations"] = generate_strategic_recommendations(
-            analytics_result
+        analytics_result["strategic_recommendations"] = (
+            generate_strategic_recommendations(analytics_result)
         )
 
         logger.info(f"[{tool_name}] Advanced analytics completed successfully")
         return analytics_result
 
     except Exception as e:
-        logger.error(f"[{tool_name}] Error in advanced analytics: {str(e)}", exc_info=True)
+        logger.error(
+            f"[{tool_name}] Error in advanced analytics: {str(e)}", exc_info=True
+        )
         return {
             "error": f"Advanced analytics failed: {str(e)}",
             "suggestion": "Try with reduced analysis scope or shorter time period",
@@ -8778,10 +9460,11 @@ async def automated_triage_rca_report_generator(
             report["investigation_summary"]["failure_type"] = "Not Found"
             report["investigation_summary"]["severity"] = "Low"
             report["investigation_summary"]["search_note"] = failure_context.get(
-                "search_note", f"Resource '{failure_identifier}' not found in any namespace"
+                "search_note",
+                f"Resource '{failure_identifier}' not found in any namespace",
             )
-            report["investigation_summary"]["namespaces_searched"] = failure_context.get(
-                "namespaces_searched", []
+            report["investigation_summary"]["namespaces_searched"] = (
+                failure_context.get("namespaces_searched", [])
             )
             report["remediation_plan"] = {
                 "immediate_actions": [
@@ -8861,7 +9544,11 @@ async def automated_triage_rca_report_generator(
         timeline_events = []
         if generate_timeline:
             timeline_events = await build_failure_timeline(
-                target_namespace, failure_identifier, time_hours, smart_get_namespace_events, logger
+                target_namespace,
+                failure_identifier,
+                time_hours,
+                smart_get_namespace_events,
+                logger,
             )
             if timeline_events:
                 report["failure_timeline"] = timeline_events
@@ -8939,7 +9626,9 @@ async def automated_triage_rca_report_generator(
         return report
 
     except Exception as e:
-        logger.error(f"Error in automated RCA for {failure_identifier}: {str(e)}", exc_info=True)
+        logger.error(
+            f"Error in automated RCA for {failure_identifier}: {str(e)}", exc_info=True
+        )
         return {
             "investigation_summary": {
                 "failure_id": failure_identifier,
@@ -9023,13 +9712,19 @@ async def check_cluster_certificate_health(
         if not target_namespaces:
             # Get all accessible namespaces
             try:
-                all_ns = k8s_core_api.list_namespace()
+                all_ns = await asyncio.to_thread(k8s_core_api.list_namespace)
                 target_namespaces = [
-                    ns.metadata.name for ns in all_ns.items if ns.metadata and ns.metadata.name
+                    ns.metadata.name
+                    for ns in all_ns.items
+                    if ns.metadata and ns.metadata.name
                 ]
-                logger.info(f"Scanning all {len(target_namespaces)} accessible namespaces")
+                logger.info(
+                    f"Scanning all {len(target_namespaces)} accessible namespaces"
+                )
             except ApiException as e:
-                logger.warning(f"Could not list all namespaces, using default set: {e.reason}")
+                logger.warning(
+                    f"Could not list all namespaces, using default set: {e.reason}"
+                )
                 target_namespaces = [
                     "default",
                     "kube-system",
@@ -9050,7 +9745,9 @@ async def check_cluster_certificate_health(
         for namespace in target_namespaces:
             try:
                 logger.debug(f"Scanning namespace: {namespace}")
-                secrets = k8s_core_api.list_namespaced_secret(namespace)
+                secrets = await asyncio.to_thread(
+                    k8s_core_api.list_namespaced_secret, namespace
+                )
                 scanned_namespaces.append(namespace)
 
                 for secret in secrets.items:
@@ -9071,14 +9768,20 @@ async def check_cluster_certificate_health(
                         if key in secret.data:
                             try:
                                 # Decode base64 certificate data
-                                cert_data = base64.b64decode(secret.data[key]).decode("utf-8")
+                                cert_data = base64.b64decode(secret.data[key]).decode(
+                                    "utf-8"
+                                )
 
                                 # Handle certificate chains (multiple certificates)
-                                cert_blocks = cert_data.split("-----END CERTIFICATE-----")
+                                cert_blocks = cert_data.split(
+                                    "-----END CERTIFICATE-----"
+                                )
 
                                 for i, cert_block in enumerate(cert_blocks):
                                     if "-----BEGIN CERTIFICATE-----" in cert_block:
-                                        full_cert = cert_block + "-----END CERTIFICATE-----"
+                                        full_cert = (
+                                            cert_block + "-----END CERTIFICATE-----"
+                                        )
                                         cert_info = parse_certificate(full_cert)
 
                                         if cert_info:
@@ -9094,9 +9797,13 @@ async def check_cluster_certificate_health(
                                                 },
                                                 "certificate_data": cert_info,
                                                 "validity": {
-                                                    "not_before": cert_info["not_before"],
+                                                    "not_before": cert_info[
+                                                        "not_before"
+                                                    ],
                                                     "not_after": cert_info["not_after"],
-                                                    "days_remaining": cert_info["days_remaining"],
+                                                    "days_remaining": cert_info[
+                                                        "days_remaining"
+                                                    ],
                                                     "status": categorize_certificate_status(
                                                         cert_info["days_remaining"],
                                                         warning_threshold_days,
@@ -9104,17 +9811,26 @@ async def check_cluster_certificate_health(
                                                     ),
                                                 },
                                                 "usage": {
-                                                    "is_ca": cert_info.get("is_ca", False)
+                                                    "is_ca": cert_info.get(
+                                                        "is_ca", False
+                                                    )
                                                     or "ca" in key.lower(),
-                                                    "is_client": "client" in key.lower(),
+                                                    "is_client": "client"
+                                                    in key.lower(),
                                                     "is_server": "server" in key.lower()
                                                     or "tls" in key.lower(),
-                                                    "san_domains": cert_info.get("san", []),
+                                                    "san_domains": cert_info.get(
+                                                        "san", []
+                                                    ),
                                                 },
                                                 "chain_validation": {
-                                                    "is_self_signed": cert_info.get("subject_cn")
+                                                    "is_self_signed": cert_info.get(
+                                                        "subject_cn"
+                                                    )
                                                     == cert_info.get("issuer_cn"),
-                                                    "issuer": cert_info.get("issuer_cn", "Unknown"),
+                                                    "issuer": cert_info.get(
+                                                        "issuer_cn", "Unknown"
+                                                    ),
                                                     "chain_length": len(cert_blocks)
                                                     if len(cert_blocks) > 1
                                                     else 1,
@@ -9125,19 +9841,25 @@ async def check_cluster_certificate_health(
 
                                             # Track CA certificates
                                             if cert_details["usage"]["is_ca"]:
-                                                ca_name = cert_info.get("subject_cn", "Unknown CA")
+                                                ca_name = cert_info.get(
+                                                    "subject_cn", "Unknown CA"
+                                                )
                                                 if ca_name not in ca_certificates:
                                                     ca_certificates[ca_name] = {
                                                         "ca_name": ca_name,
                                                         "issued_certificates": 0,
-                                                        "ca_expiry": cert_info["not_after"],
+                                                        "ca_expiry": cert_info[
+                                                            "not_after"
+                                                        ],
                                                         "trust_status": "trusted"
-                                                        if not cert_details["chain_validation"][
-                                                            "is_self_signed"
-                                                        ]
+                                                        if not cert_details[
+                                                            "chain_validation"
+                                                        ]["is_self_signed"]
                                                         else "self-signed",
                                                     }
-                                                ca_certificates[ca_name]["issued_certificates"] += 1
+                                                ca_certificates[ca_name][
+                                                    "issued_certificates"
+                                                ] += 1
 
                             except Exception as e:
                                 logger.debug(
@@ -9171,7 +9893,9 @@ async def check_cluster_certificate_health(
                 for sys_ns in system_cert_namespaces:
                     if sys_ns not in scanned_namespaces:
                         try:
-                            secrets = k8s_core_api.list_namespaced_secret(sys_ns)
+                            secrets = await asyncio.to_thread(
+                                k8s_core_api.list_namespaced_secret, sys_ns
+                            )
                             scanned_namespaces.append(sys_ns)
                             for secret in secrets.items:
                                 if secret.data:
@@ -9182,25 +9906,34 @@ async def check_cluster_certificate_health(
                                                 cert_data = base64.b64decode(
                                                     secret.data[key]
                                                 ).decode("utf-8")
-                                                if "-----BEGIN CERTIFICATE-----" in cert_data:
-                                                    cert_info = parse_certificate(cert_data)
+                                                if (
+                                                    "-----BEGIN CERTIFICATE-----"
+                                                    in cert_data
+                                                ):
+                                                    cert_info = parse_certificate(
+                                                        cert_data
+                                                    )
                                                     if cert_info:
                                                         status = categorize_certificate_status(
                                                             cert_info["days_remaining"],
                                                             warning_threshold_days,
                                                             critical_threshold_days,
                                                         )
-                                                        result["system_certificates"].append(
+                                                        result[
+                                                            "system_certificates"
+                                                        ].append(
                                                             {
                                                                 "component": sys_ns.replace(
                                                                     "openshift-", ""
                                                                 ),
                                                                 "certificate_purpose": secret.metadata.name,
                                                                 "subject_cn": cert_info.get(
-                                                                    "subject_cn", "Unknown"
+                                                                    "subject_cn",
+                                                                    "Unknown",
                                                                 ),
                                                                 "expiry_date": cert_info.get(
-                                                                    "not_after", "Unknown"
+                                                                    "not_after",
+                                                                    "Unknown",
                                                                 ),
                                                                 "days_remaining": cert_info.get(
                                                                     "days_remaining", 0
@@ -9225,12 +9958,18 @@ async def check_cluster_certificate_health(
 
         # Update scan summary
         total_certs = len(certificates_found)
-        healthy_count = len([c for c in certificates_found if c["validity"]["status"] == "healthy"])
-        warning_count = len([c for c in certificates_found if c["validity"]["status"] == "warning"])
+        healthy_count = len(
+            [c for c in certificates_found if c["validity"]["status"] == "healthy"]
+        )
+        warning_count = len(
+            [c for c in certificates_found if c["validity"]["status"] == "warning"]
+        )
         critical_count = len(
             [c for c in certificates_found if c["validity"]["status"] == "critical"]
         )
-        expired_count = len([c for c in certificates_found if c["validity"]["status"] == "expired"])
+        expired_count = len(
+            [c for c in certificates_found if c["validity"]["status"] == "expired"]
+        )
 
         result["scan_summary"].update(
             {
@@ -9284,8 +10023,12 @@ async def check_cluster_certificate_health(
         # Generate expiration timeline
         timeline_dict = defaultdict(list)
         for cert in certificates_found:
-            if cert["validity"]["days_remaining"] >= 0:  # Don't include expired certs in timeline
-                expiry_date = cert["certificate_data"]["not_after"][:10]  # Just the date part
+            if (
+                cert["validity"]["days_remaining"] >= 0
+            ):  # Don't include expired certs in timeline
+                expiry_date = cert["certificate_data"]["not_after"][
+                    :10
+                ]  # Just the date part
                 timeline_dict[expiry_date].append(
                     {
                         "name": cert["certificate_info"]["name"],
@@ -9298,15 +10041,21 @@ async def check_cluster_certificate_health(
         # Sort timeline by date
         sorted_timeline = []
         for date in sorted(timeline_dict.keys()):
-            sorted_timeline.append({"date": date, "certificates_expiring": timeline_dict[date]})
+            sorted_timeline.append(
+                {"date": date, "certificates_expiring": timeline_dict[date]}
+            )
 
-        result["expiration_timeline"] = sorted_timeline[:30]  # Limit to next 30 expiration dates
+        result["expiration_timeline"] = sorted_timeline[
+            :30
+        ]  # Limit to next 30 expiration dates
 
         # Generate renewal recommendations
         for cert in certificates_found:
             if cert["validity"]["status"] in ["critical", "warning", "expired"]:
                 urgency = (
-                    "immediate" if cert["validity"]["status"] in ["critical", "expired"] else "soon"
+                    "immediate"
+                    if cert["validity"]["status"] in ["critical", "expired"]
+                    else "soon"
                 )
 
                 recommendation = {
@@ -9319,9 +10068,9 @@ async def check_cluster_certificate_health(
                         f"Update secret {cert['certificate_info']['secret_name']} in namespace {cert['certificate_info']['namespace']}",
                         "Restart affected pods/services",
                     ],
-                    "automation_available": cert["certificate_info"]["namespace"].startswith(
-                        "openshift-"
-                    ),
+                    "automation_available": cert["certificate_info"][
+                        "namespace"
+                    ].startswith("openshift-"),
                 }
 
                 if cert["certificate_info"]["namespace"].startswith("openshift-"):
@@ -9351,7 +10100,10 @@ async def check_cluster_certificate_health(
                 )
 
             # Check for self-signed certificates
-            if cert["chain_validation"]["is_self_signed"] and not cert["usage"]["is_ca"]:
+            if (
+                cert["chain_validation"]["is_self_signed"]
+                and not cert["usage"]["is_ca"]
+            ):
                 result["security_findings"].append(
                     {
                         "certificate": cert["certificate_info"]["name"],
@@ -9457,7 +10209,9 @@ async def ci_cd_performance_baselining_tool(
         historical_success_query = f"sum by (namespace) (increase(tekton_pipelines_controller_pipelinerun_taskrun_duration_seconds_count{{status='success'}}[{baseline_period}])) / sum by (namespace) (increase(tekton_pipelines_controller_pipelinerun_taskrun_duration_seconds_count[{baseline_period}])) * 100"
         reconcile_query = "sum by (namespace_name, success) (rate(tekton_pipelines_controller_reconcile_count[1h]))"
 
-        logger.info("Querying Prometheus for Tekton pipeline metrics (10 queries in parallel)...")
+        logger.info(
+            "Querying Prometheus for Tekton pipeline metrics (10 queries in parallel)..."
+        )
 
         # Execute ALL queries in parallel for maximum performance
         (
@@ -9489,7 +10243,9 @@ async def ci_cd_performance_baselining_tool(
         if not count_result.get("success") or not sum_result.get("success"):
             logger.warning("Prometheus queries failed, falling back to Kubernetes API")
             result["data_source"] = "kubernetes_api_fallback"
-            result["prometheus_error"] = count_result.get("error") or sum_result.get("error")
+            result["prometheus_error"] = count_result.get("error") or sum_result.get(
+                "error"
+            )
             # Return early with empty results if Prometheus fails
             return result
 
@@ -9502,7 +10258,9 @@ async def ci_cd_performance_baselining_tool(
             namespace = metric.get("namespace", "unknown")
             status = metric.get("status", "unknown")
             count = (
-                float(item.get("value", [0, 0])[1]) if isinstance(item.get("value"), list) else 0
+                float(item.get("value", [0, 0])[1])
+                if isinstance(item.get("value"), list)
+                else 0
             )
 
             if namespace not in namespace_stats:
@@ -9524,7 +10282,9 @@ async def ci_cd_performance_baselining_tool(
             metric = item.get("metric", {})
             namespace = metric.get("namespace", "unknown")
             duration_sum = (
-                float(item.get("value", [0, 0])[1]) if isinstance(item.get("value"), list) else 0
+                float(item.get("value", [0, 0])[1])
+                if isinstance(item.get("value"), list)
+                else 0
             )
 
             if namespace in namespace_stats:
@@ -9681,7 +10441,9 @@ async def ci_cd_performance_baselining_tool(
         filtered_namespaces = namespace_stats.keys()
         if pipeline_names:
             filtered_namespaces = [
-                ns for ns in filtered_namespaces if any(pn in ns for pn in pipeline_names)
+                ns
+                for ns in filtered_namespaces
+                if any(pn in ns for pn in pipeline_names)
             ]
 
         # Build baseline entries for each namespace
@@ -9712,7 +10474,9 @@ async def ci_cd_performance_baselining_tool(
                 estimated_std = avg_duration * 0.4
 
             # Get reconciliation health
-            recon = reconcile_stats.get(namespace, {"success_rate": 0, "failure_rate": 0})
+            recon = reconcile_stats.get(
+                namespace, {"success_rate": 0, "failure_rate": 0}
+            )
             reconcile_health = "healthy"
             if recon["failure_rate"] > recon["success_rate"]:
                 reconcile_health = "degraded"
@@ -9723,7 +10487,9 @@ async def ci_cd_performance_baselining_tool(
             # SE = sqrt(p * (1-p) / n) where p is success rate as decimal
             p = success_rate / 100.0
             if total_count > 0 and 0 < p < 1:
-                success_rate_se = np.sqrt(p * (1 - p) / total_count) * 100  # Convert to percentage
+                success_rate_se = (
+                    np.sqrt(p * (1 - p) / total_count) * 100
+                )  # Convert to percentage
             else:
                 success_rate_se = 0  # No variance for 0% or 100% success rate
 
@@ -9733,13 +10499,19 @@ async def ci_cd_performance_baselining_tool(
                     "mean_seconds": avg_duration,
                     "std_seconds": estimated_std,
                     "upper_bound": avg_duration + (deviation_threshold * estimated_std),
-                    "lower_bound": max(0, avg_duration - (deviation_threshold * estimated_std)),
+                    "lower_bound": max(
+                        0, avg_duration - (deviation_threshold * estimated_std)
+                    ),
                 },
                 "success_rate": {
                     "mean_percent": success_rate,
                     "std_percent": success_rate_se,
-                    "lower_bound": max(0, success_rate - (deviation_threshold * success_rate_se)),
-                    "upper_bound": min(100, success_rate + (deviation_threshold * success_rate_se)),
+                    "lower_bound": max(
+                        0, success_rate - (deviation_threshold * success_rate_se)
+                    ),
+                    "upper_bound": min(
+                        100, success_rate + (deviation_threshold * success_rate_se)
+                    ),
                 },
                 "reconciliation": {
                     "success_rate_per_second": recon["success_rate"],
@@ -9765,7 +10537,9 @@ async def ci_cd_performance_baselining_tool(
 
             # Calculate duration change percentage (positive = slower = degradation)
             if historical_avg > 0 and recent_avg > 0:
-                duration_change_pct = ((recent_avg - historical_avg) / historical_avg) * 100
+                duration_change_pct = (
+                    (recent_avg - historical_avg) / historical_avg
+                ) * 100
             else:
                 duration_change_pct = 0
 
@@ -9778,7 +10552,9 @@ async def ci_cd_performance_baselining_tool(
 
             # Determine trend based on actual metrics comparison
             # Use deviation_threshold to determine significance (default 2.0 = ~5% significance)
-            significance_threshold = 10.0 / deviation_threshold  # ~5% change with default threshold
+            significance_threshold = (
+                10.0 / deviation_threshold
+            )  # ~5% change with default threshold
 
             # Check if there is any recent activity before classifying trends
             has_recent_data = recent_avg > 0 or recent_success > 0
@@ -9921,8 +10697,12 @@ async def ci_cd_performance_baselining_tool(
             task_duration_query = f"sum by (task, namespace) (increase(tekton_pipelines_controller_pipelinerun_taskrun_duration_seconds_sum[{baseline_period}])) / sum by (task, namespace) (increase(tekton_pipelines_controller_pipelinerun_taskrun_duration_seconds_count[{baseline_period}]))"
             task_count_query = f"sum by (task, namespace, status) (increase(tekton_pipelines_controller_pipelinerun_taskrun_duration_seconds_count[{baseline_period}]))"
 
-            task_duration_result = await _execute_prometheus_query_internal(task_duration_query)
-            task_count_result = await _execute_prometheus_query_internal(task_count_query)
+            task_duration_result = await _execute_prometheus_query_internal(
+                task_duration_query
+            )
+            task_count_result = await _execute_prometheus_query_internal(
+                task_count_query
+            )
 
             task_stats = {}
 
@@ -10017,7 +10797,10 @@ async def ci_cd_performance_baselining_tool(
                 result["task_level_analysis"]["task_baselines"].append(task_baseline)
 
             # Add note if task-level data is limited
-            if unknown_task_count > 0 and len(result["task_level_analysis"]["task_baselines"]) == 0:
+            if (
+                unknown_task_count > 0
+                and len(result["task_level_analysis"]["task_baselines"]) == 0
+            ):
                 result["task_level_analysis"]["note"] = (
                     f"Task-level analysis unavailable: Prometheus metrics do not include 'task' labels. "
                     f"Found {unknown_task_count} namespace-level aggregations. "
@@ -10031,13 +10814,15 @@ async def ci_cd_performance_baselining_tool(
             result["task_level_analysis"]["task_baselines"].sort(
                 key=lambda x: x.get("avg_duration_seconds", 0) or 0, reverse=True
             )
-            result["task_level_analysis"]["slowest_tasks"] = result["task_level_analysis"][
-                "task_baselines"
-            ][:10]
+            result["task_level_analysis"]["slowest_tasks"] = result[
+                "task_level_analysis"
+            ]["task_baselines"][:10]
 
             # Get most failed tasks (by failure count)
             failed_tasks = [
-                t for t in result["task_level_analysis"]["task_baselines"] if t["failed_count"] > 0
+                t
+                for t in result["task_level_analysis"]["task_baselines"]
+                if t["failed_count"] > 0
             ]
             failed_tasks.sort(key=lambda x: x["failed_count"], reverse=True)
             result["task_level_analysis"]["most_failed_tasks"] = failed_tasks[:10]
@@ -10047,7 +10832,9 @@ async def ci_cd_performance_baselining_tool(
             )
 
         # Sort results for better presentation
-        result["pipeline_baselines"].sort(key=lambda x: x.get("data_points", 0), reverse=True)
+        result["pipeline_baselines"].sort(
+            key=lambda x: x.get("data_points", 0), reverse=True
+        )
         result["performance_trends"]["improving_pipelines"].sort(
             key=lambda x: x.get("avg_duration", 0)
         )
@@ -10064,8 +10851,12 @@ async def ci_cd_performance_baselining_tool(
             "total_taskruns_tracked": sum(
                 b.get("data_points", 0) for b in result["pipeline_baselines"]
             ),
-            "total_successes": sum(b.get("success_count", 0) for b in result["pipeline_baselines"]),
-            "total_failures": sum(b.get("failed_count", 0) for b in result["pipeline_baselines"]),
+            "total_successes": sum(
+                b.get("success_count", 0) for b in result["pipeline_baselines"]
+            ),
+            "total_failures": sum(
+                b.get("failed_count", 0) for b in result["pipeline_baselines"]
+            ),
             "namespaces_needing_attention": len(
                 [
                     b
@@ -10076,7 +10867,9 @@ async def ci_cd_performance_baselining_tool(
                     < 80
                 ]
             ),
-            "optimization_opportunities_count": len(result["optimization_opportunities"]),
+            "optimization_opportunities_count": len(
+                result["optimization_opportunities"]
+            ),
         }
 
         logger.info(
@@ -10207,8 +11000,12 @@ async def pipeline_tracer(
 
             if first_start and last_completion:
                 try:
-                    start_dt = datetime.fromisoformat(first_start.replace("Z", "+00:00"))
-                    end_dt = datetime.fromisoformat(last_completion.replace("Z", "+00:00"))
+                    start_dt = datetime.fromisoformat(
+                        first_start.replace("Z", "+00:00")
+                    )
+                    end_dt = datetime.fromisoformat(
+                        last_completion.replace("Z", "+00:00")
+                    )
                     summary["total_duration"] = (end_dt - start_dt).total_seconds()
                 except Exception as e:
                     logger.debug(f"Failed to calculate total duration: {e}")
@@ -10240,14 +11037,20 @@ async def pipeline_tracer(
             overall_status = "not_found"
         else:
             # Check build PLRs
-            builds_ok = all(p["status"] in ["Succeeded", "Completed"] for p in pipeline_flow)
-            builds_failed = any(p["status"] in ["Failed", "Error"] for p in pipeline_flow)
+            builds_ok = all(
+                p["status"] in ["Succeeded", "Completed"] for p in pipeline_flow
+            )
+            builds_failed = any(
+                p["status"] in ["Failed", "Error"] for p in pipeline_flow
+            )
 
             # Check release status from lifecycle
             releases = lifecycle.get("releases", [])
             release_failed = any(r.get("status") == "Failed" for r in releases)
             release_succeeded = (
-                all(r.get("status") == "Succeeded" for r in releases) if releases else True
+                all(r.get("status") == "Succeeded" for r in releases)
+                if releases
+                else True
             )
 
             if builds_failed:
@@ -10262,7 +11065,11 @@ async def pipeline_tracer(
         # Build stage-level summary
         stage_summary = {}
         if pipeline_flow:
-            [p.get("completion_time") for p in pipeline_flow if p.get("completion_time")]
+            [
+                p.get("completion_time")
+                for p in pipeline_flow
+                if p.get("completion_time")
+            ]
             stage_summary["build"] = {
                 "count": len(pipeline_flow),
                 "status": "succeeded"
@@ -10320,7 +11127,11 @@ async def pipeline_tracer(
             "pipeline_flow": [],
             "artifacts": [],
             "bottlenecks": [],
-            "summary": {"total_duration": 0, "clusters_traversed": 0, "pipelines_executed": 0},
+            "summary": {
+                "total_duration": 0,
+                "clusters_traversed": 0,
+                "pipelines_executed": 0,
+            },
         }
 
 
@@ -10350,10 +11161,15 @@ async def get_machine_config_pool_status(
 
     try:
         # Query MachineConfigPool resources using Kubernetes Custom Resource API
-        logger.info("Querying MachineConfigPool resources from OpenShift Machine Config Operator")
+        logger.info(
+            "Querying MachineConfigPool resources from OpenShift Machine Config Operator"
+        )
 
-        pools_response = k8s_custom_api.list_cluster_custom_object(
-            group="machineconfiguration.openshift.io", version="v1", plural="machineconfigpools"
+        pools_response = await asyncio.to_thread(
+            k8s_custom_api.list_cluster_custom_object,
+            group="machineconfiguration.openshift.io",
+            version="v1",
+            plural="machineconfigpools",
         )
 
         all_pools = pools_response.get("items", [])
@@ -10367,7 +11183,9 @@ async def get_machine_config_pool_status(
                 if pool_name in pool_names:
                     filtered_pools.append(pool)
             pools_to_analyze = filtered_pools
-            logger.info(f"Filtered to {len(pools_to_analyze)} requested pools: {pool_names}")
+            logger.info(
+                f"Filtered to {len(pools_to_analyze)} requested pools: {pool_names}"
+            )
         else:
             pools_to_analyze = all_pools
 
@@ -10388,7 +11206,9 @@ async def get_machine_config_pool_status(
 
         # Generate pools overview
         total_pools = len(analyzed_pools)
-        healthy_pools = len([pool for pool in analyzed_pools if pool.get("status") == "ready"])
+        healthy_pools = len(
+            [pool for pool in analyzed_pools if pool.get("status") == "ready"]
+        )
         updating_pools = len(
             [
                 pool
@@ -10396,7 +11216,9 @@ async def get_machine_config_pool_status(
                 if pool.get("update_progress", {}).get("is_updating", False)
             ]
         )
-        degraded_pools = len([pool for pool in analyzed_pools if pool.get("status") == "degraded"])
+        degraded_pools = len(
+            [pool for pool in analyzed_pools if pool.get("status") == "degraded"]
+        )
 
         pools_overview = {
             "total_pools": total_pools,
@@ -10410,8 +11232,11 @@ async def get_machine_config_pool_status(
         if include_update_history:
             try:
                 logger.info("Querying recent MachineConfig changes")
-                machine_configs_response = k8s_custom_api.list_cluster_custom_object(
-                    group="machineconfiguration.openshift.io", version="v1", plural="machineconfigs"
+                machine_configs_response = await asyncio.to_thread(
+                    k8s_custom_api.list_cluster_custom_object,
+                    group="machineconfiguration.openshift.io",
+                    version="v1",
+                    plural="machineconfigs",
                 )
 
                 machine_configs = machine_configs_response.get("items", [])
@@ -10428,7 +11253,9 @@ async def get_machine_config_pool_status(
                     recent_config_changes.append(
                         {
                             "config_name": metadata.get("name", "unknown"),
-                            "created_time": metadata.get("creationTimestamp", "unknown"),
+                            "created_time": metadata.get(
+                                "creationTimestamp", "unknown"
+                            ),
                             "changes": [
                                 "Configuration details would require detailed diff analysis"
                             ],
@@ -10461,7 +11288,7 @@ async def get_machine_config_pool_status(
                     node_selector = pool_config.get("node_selector", {})
 
                     # Get all nodes and filter by labels
-                    nodes = k8s_core_api.list_node()
+                    nodes = await asyncio.to_thread(k8s_core_api.list_node)
                     matching_nodes = []
 
                     for node in nodes.items:
@@ -10490,10 +11317,12 @@ async def get_machine_config_pool_status(
                             # Extract machine config info from annotations
                             annotations = node.metadata.annotations or {}
                             node_status["machine_config"] = annotations.get(
-                                "machineconfiguration.openshift.io/currentConfig", "unknown"
+                                "machineconfiguration.openshift.io/currentConfig",
+                                "unknown",
                             )
                             node_status["last_update"] = annotations.get(
-                                "machineconfiguration.openshift.io/lastAppliedDrift", "unknown"
+                                "machineconfiguration.openshift.io/lastAppliedDrift",
+                                "unknown",
                             )
 
                             matching_nodes.append(node_status)
@@ -10522,9 +11351,7 @@ async def get_machine_config_pool_status(
         return result
 
     except ApiException as e:
-        error_msg = (
-            f"Kubernetes API error while querying machine config pools: {e.status} - {e.reason}"
-        )
+        error_msg = f"Kubernetes API error while querying machine config pools: {e.status} - {e.reason}"
         logger.error(error_msg)
         return {
             "pools_overview": {
@@ -10583,7 +11410,9 @@ async def _get_fallback_cluster_health() -> Dict[str, Any]:
     ClusterOperator resources. The output is structured similarly for compatibility
     but clearly marked as fallback_mode=True.
     """
-    logger.info("Performing fallback cluster health analysis using standard Kubernetes resources")
+    logger.info(
+        "Performing fallback cluster health analysis using standard Kubernetes resources"
+    )
 
     cluster_info = {}
     component_health = []  # Not operators - these are namespace/node health checks
@@ -10599,7 +11428,7 @@ async def _get_fallback_cluster_health() -> Dict[str, Any]:
             # Use the proper VersionApi to get cluster version
             try:
                 version_api = VersionApi(k8s_core_api.api_client)
-                version_info = version_api.get_code()
+                version_info = await asyncio.to_thread(version_api.get_code)
                 cluster_info = {
                     "cluster_version": version_info.git_version or "unknown",
                     "platform": version_info.platform or "unknown",
@@ -10627,7 +11456,9 @@ async def _get_fallback_cluster_health() -> Dict[str, Any]:
             for ns_name in system_namespaces:
                 try:
                     # Get pods in system namespace
-                    pods = k8s_core_api.list_namespaced_pod(namespace=ns_name)
+                    pods = await asyncio.to_thread(
+                        k8s_core_api.list_namespaced_pod, namespace=ns_name
+                    )
 
                     total_pods = len(pods.items)
                     running_pods = 0
@@ -10674,7 +11505,9 @@ async def _get_fallback_cluster_health() -> Dict[str, Any]:
                         critical_issues.append(
                             {
                                 "component": f"system-namespace:{ns_name}",
-                                "severity": "warning" if failed_pods < 3 else "critical",
+                                "severity": "warning"
+                                if failed_pods < 3
+                                else "critical",
                                 "issue": f"{failed_pods} failed pods in {ns_name} namespace",
                                 "impact": f"Potential service disruption in {ns_name}",
                                 "recommended_action": f"Check pod logs in {ns_name} namespace",
@@ -10711,7 +11544,7 @@ async def _get_fallback_cluster_health() -> Dict[str, Any]:
 
         # Check node health
         try:
-            nodes = k8s_core_api.list_node()
+            nodes = await asyncio.to_thread(k8s_core_api.list_node)
             total_nodes = len(nodes.items)
             ready_nodes = 0
 
@@ -10748,7 +11581,9 @@ async def _get_fallback_cluster_health() -> Dict[str, Any]:
                 critical_issues.append(
                     {
                         "component": "cluster-nodes",
-                        "severity": "critical" if node_health_ratio < 0.5 else "warning",
+                        "severity": "critical"
+                        if node_health_ratio < 0.5
+                        else "warning",
                         "issue": f"{total_nodes - ready_nodes} of {total_nodes} nodes not ready",
                         "impact": "Reduced cluster capacity and potential service disruption",
                         "recommended_action": "Check node status and system resources",
@@ -10769,8 +11604,12 @@ async def _get_fallback_cluster_health() -> Dict[str, Any]:
 
         # Calculate health summary (for components, not operators)
         total_components = len(component_health)
-        healthy_components = len([c for c in component_health if c.get("status") == "available"])
-        degraded_components = len([c for c in component_health if c.get("degraded", False)])
+        healthy_components = len(
+            [c for c in component_health if c.get("status") == "available"]
+        )
+        degraded_components = len(
+            [c for c in component_health if c.get("degraded", False)]
+        )
 
         overall_health = "healthy"
         if degraded_components > 0:
@@ -10861,8 +11700,11 @@ async def get_openshift_cluster_operator_status(
         # Query ClusterOperator resources from OpenShift Config API
         logger.info("Querying ClusterOperator resources from OpenShift Config API")
 
-        operators_response = k8s_custom_api.list_cluster_custom_object(
-            group="config.openshift.io", version="v1", plural="clusteroperators"
+        operators_response = await asyncio.to_thread(
+            k8s_custom_api.list_cluster_custom_object,
+            group="config.openshift.io",
+            version="v1",
+            plural="clusteroperators",
         )
 
         all_operators = operators_response.get("items", [])
@@ -10885,15 +11727,20 @@ async def get_openshift_cluster_operator_status(
         # Get cluster version information
         cluster_info = {}
         try:
-            cluster_version_response = k8s_custom_api.list_cluster_custom_object(
-                group="config.openshift.io", version="v1", plural="clusterversions"
+            cluster_version_response = await asyncio.to_thread(
+                k8s_custom_api.list_cluster_custom_object,
+                group="config.openshift.io",
+                version="v1",
+                plural="clusterversions",
             )
             cluster_versions = cluster_version_response.get("items", [])
             if cluster_versions:
                 cv = cluster_versions[0]  # There's typically only one
                 cv_status = cv.get("status", {})
                 cluster_info = {
-                    "cluster_version": cv_status.get("desired", {}).get("version", "unknown"),
+                    "cluster_version": cv_status.get("desired", {}).get(
+                        "version", "unknown"
+                    ),
                     "cluster_id": cv.get("spec", {}).get("clusterID", "unknown"),
                     "infrastructure_status": cv_status.get("infrastructure", {}).get(
                         "status", "unknown"
@@ -10972,7 +11819,9 @@ async def get_openshift_cluster_operator_status(
         healthy_operators = len(
             [op for op in analyzed_operators if op.get("status") == "available"]
         )
-        degraded_operators = len([op for op in analyzed_operators if op.get("degraded", False)])
+        degraded_operators = len(
+            [op for op in analyzed_operators if op.get("degraded", False)]
+        )
 
         # Filter degraded operators if requested (after counting)
         if filter_degraded:
@@ -11023,7 +11872,9 @@ async def get_openshift_cluster_operator_status(
 
         if e.status == 403:
             error_msg += ". Check RBAC permissions for config.openshift.io resources"
-            logger.info("Attempting fallback analysis using standard Kubernetes resources...")
+            logger.info(
+                "Attempting fallback analysis using standard Kubernetes resources..."
+            )
 
             # Fallback: Use standard Kubernetes resources to provide alternative health info
             try:
@@ -11043,7 +11894,9 @@ async def get_openshift_cluster_operator_status(
                 logger.error(f"Fallback analysis also failed: {fallback_error}")
 
         elif e.status == 404:
-            error_msg += ". ClusterOperator resource not found - may not be an OpenShift cluster"
+            error_msg += (
+                ". ClusterOperator resource not found - may not be an OpenShift cluster"
+            )
             logger.info("Attempting fallback analysis for non-OpenShift cluster...")
 
             # Fallback for non-OpenShift clusters
@@ -11131,7 +11984,9 @@ async def _process_namespace_topology(
     pods_list = None
     if "pods" in component_types or "services" in component_types:
         try:
-            pods_result = await asyncio.to_thread(core_api.list_namespaced_pod, namespace=namespace)
+            pods_result = await asyncio.to_thread(
+                core_api.list_namespaced_pod, namespace=namespace
+            )
             pods_list = pods_result.items
         except Exception as e:
             logger.debug(f"Could not pre-fetch pods for {namespace}: {e}")
@@ -11143,7 +11998,9 @@ async def _process_namespace_topology(
                 deployments = await asyncio.to_thread(
                     apps_api.list_namespaced_deployment, namespace=namespace
                 )
-                permissions["accessible"].append(f"{cluster_name}/{namespace}/deployments")
+                permissions["accessible"].append(
+                    f"{cluster_name}/{namespace}/deployments"
+                )
 
                 for deployment in deployments.items:
                     node_id = generate_node_id(
@@ -11168,7 +12025,11 @@ async def _process_namespace_topology(
 
                     if include_metrics:
                         node["metrics"] = await get_resource_metrics(
-                            cluster_name, "deployment", namespace, deployment.metadata.name, logger
+                            cluster_name,
+                            "deployment",
+                            namespace,
+                            deployment.metadata.name,
+                            logger,
                         )
 
                     nodes.append(node)
@@ -11190,7 +12051,9 @@ async def _process_namespace_topology(
                     e, "deployments", namespace, skip_on_permission_denied, logger
                 )
                 if error_info["permission_denied"]:
-                    permissions["denied"].append(f"{cluster_name}/{namespace}/deployments")
+                    permissions["denied"].append(
+                        f"{cluster_name}/{namespace}/deployments"
+                    )
                     if not skip_on_permission_denied:
                         raise
                 else:
@@ -11207,7 +12070,9 @@ async def _process_namespace_topology(
                 replicasets = await asyncio.to_thread(
                     apps_api.list_namespaced_replica_set, namespace=namespace
                 )
-                permissions["accessible"].append(f"{cluster_name}/{namespace}/replicasets")
+                permissions["accessible"].append(
+                    f"{cluster_name}/{namespace}/replicasets"
+                )
 
                 for replicaset in replicasets.items:
                     node_id = generate_node_id(
@@ -11232,7 +12097,11 @@ async def _process_namespace_topology(
 
                     if include_metrics:
                         node["metrics"] = await get_resource_metrics(
-                            cluster_name, "replicaset", namespace, replicaset.metadata.name, logger
+                            cluster_name,
+                            "replicaset",
+                            namespace,
+                            replicaset.metadata.name,
+                            logger,
                         )
 
                     nodes.append(node)
@@ -11251,7 +12120,9 @@ async def _process_namespace_topology(
                     e, "replicasets", namespace, skip_on_permission_denied, logger
                 )
                 if error_info["permission_denied"]:
-                    permissions["denied"].append(f"{cluster_name}/{namespace}/replicasets")
+                    permissions["denied"].append(
+                        f"{cluster_name}/{namespace}/replicasets"
+                    )
                     if not skip_on_permission_denied:
                         raise
                 else:
@@ -11295,7 +12166,11 @@ async def _process_namespace_topology(
 
                     if include_metrics:
                         node["metrics"] = await get_resource_metrics(
-                            cluster_name, "service", namespace, service.metadata.name, logger
+                            cluster_name,
+                            "service",
+                            namespace,
+                            service.metadata.name,
+                            logger,
                         )
 
                     nodes.append(node)
@@ -11304,7 +12179,11 @@ async def _process_namespace_topology(
                     # Analyze service dependencies (pass pre-fetched pods to avoid N+1 queries)
                     service_dict = service.to_dict()
                     service_edges = await analyze_service_dependencies(
-                        service_dict, cluster_name, core_api, logger, pods_list=pods_list
+                        service_dict,
+                        cluster_name,
+                        core_api,
+                        logger,
+                        pods_list=pods_list,
                     )
                     edges.extend(service_edges)
                     stats["edges"] += len(service_edges)
@@ -11337,7 +12216,9 @@ async def _process_namespace_topology(
                     )
                     pods_items = pods_result.items
                 for pod in pods_items:
-                    node_id = generate_node_id(cluster_name, namespace, "pod", pod.metadata.name)
+                    node_id = generate_node_id(
+                        cluster_name, namespace, "pod", pod.metadata.name
+                    )
 
                     node = {
                         "id": node_id,
@@ -11363,7 +12244,9 @@ async def _process_namespace_topology(
 
                     # Analyze pod dependencies
                     pod_dict = pod.to_dict()
-                    owner_edges = await analyze_owner_references(pod_dict, cluster_name, "pod")
+                    owner_edges = await analyze_owner_references(
+                        pod_dict, cluster_name, "pod"
+                    )
                     volume_edges = await analyze_volume_dependencies(
                         pod_dict, cluster_name, "pod", logger
                     )
@@ -11388,11 +12271,15 @@ async def _process_namespace_topology(
         if "persistentvolumeclaims" in component_types:
             try:
                 pvcs = await asyncio.to_thread(
-                    core_api.list_namespaced_persistent_volume_claim, namespace=namespace
+                    core_api.list_namespaced_persistent_volume_claim,
+                    namespace=namespace,
                 )
                 for pvc in pvcs.items:
                     node_id = generate_node_id(
-                        cluster_name, namespace, "persistentvolumeclaim", pvc.metadata.name
+                        cluster_name,
+                        namespace,
+                        "persistentvolumeclaim",
+                        pvc.metadata.name,
                     )
 
                     node = {
@@ -11425,7 +12312,11 @@ async def _process_namespace_topology(
 
             except Exception as e:
                 error_info = handle_resource_fetch_error(
-                    e, "persistentvolumeclaims", namespace, skip_on_permission_denied, logger
+                    e,
+                    "persistentvolumeclaims",
+                    namespace,
+                    skip_on_permission_denied,
+                    logger,
                 )
                 if error_info["permission_denied"]:
                     permissions["denied"].append(
@@ -11445,7 +12336,9 @@ async def _process_namespace_topology(
                 configmaps = await asyncio.to_thread(
                     core_api.list_namespaced_config_map, namespace=namespace
                 )
-                permissions["accessible"].append(f"{cluster_name}/{namespace}/configmaps")
+                permissions["accessible"].append(
+                    f"{cluster_name}/{namespace}/configmaps"
+                )
 
                 for cm in configmaps.items:
                     node_id = generate_node_id(
@@ -11459,7 +12352,9 @@ async def _process_namespace_topology(
                         "namespace": namespace,
                         "cluster": cluster_name,
                         "status": "Active",
-                        "metadata": {"data_keys": list(cm.data.keys()) if cm.data else []},
+                        "metadata": {
+                            "data_keys": list(cm.data.keys()) if cm.data else []
+                        },
                     }
 
                     nodes.append(node)
@@ -11470,7 +12365,9 @@ async def _process_namespace_topology(
                     e, "configmaps", namespace, skip_on_permission_denied, logger
                 )
                 if error_info["permission_denied"]:
-                    permissions["denied"].append(f"{cluster_name}/{namespace}/configmaps")
+                    permissions["denied"].append(
+                        f"{cluster_name}/{namespace}/configmaps"
+                    )
                     if not skip_on_permission_denied:
                         raise
                 else:
@@ -11503,7 +12400,9 @@ async def _process_namespace_topology(
                         "status": "Active",
                         "metadata": {
                             "type": secret.type,
-                            "data_keys": list(secret.data.keys()) if secret.data else [],
+                            "data_keys": list(secret.data.keys())
+                            if secret.data
+                            else [],
                         },
                     }
 
@@ -11645,11 +12544,17 @@ async def _process_namespace_topology(
 
                 for tr in task_runs.get("items", []):
                     tr_name = tr.get("metadata", {}).get("name", "")
-                    node_id = generate_node_id(cluster_name, namespace, "taskrun", tr_name)
+                    node_id = generate_node_id(
+                        cluster_name, namespace, "taskrun", tr_name
+                    )
 
                     # Get status from conditions
                     conditions = tr.get("status", {}).get("conditions", [])
-                    status = conditions[-1].get("reason", "Unknown") if conditions else "Unknown"
+                    status = (
+                        conditions[-1].get("reason", "Unknown")
+                        if conditions
+                        else "Unknown"
+                    )
 
                     node = {
                         "id": node_id,
@@ -11659,7 +12564,9 @@ async def _process_namespace_topology(
                         "cluster": cluster_name,
                         "status": status,
                         "metadata": {
-                            "task_ref": tr.get("spec", {}).get("taskRef", {}).get("name", ""),
+                            "task_ref": tr.get("spec", {})
+                            .get("taskRef", {})
+                            .get("name", ""),
                             "pipeline_run": tr.get("metadata", {})
                             .get("labels", {})
                             .get("tekton.dev/pipelineRun", ""),
@@ -11673,7 +12580,9 @@ async def _process_namespace_topology(
 
                     # Create edge to PipelineRun if part of one
                     pipeline_run_name = (
-                        tr.get("metadata", {}).get("labels", {}).get("tekton.dev/pipelineRun")
+                        tr.get("metadata", {})
+                        .get("labels", {})
+                        .get("tekton.dev/pipelineRun")
                     )
                     if pipeline_run_name:
                         pr_id = generate_node_id(
@@ -11692,13 +12601,17 @@ async def _process_namespace_topology(
                     # Create edge to Task if referenced
                     task_ref = tr.get("spec", {}).get("taskRef", {}).get("name")
                     if task_ref:
-                        task_id = generate_node_id(cluster_name, namespace, "task", task_ref)
+                        task_id = generate_node_id(
+                            cluster_name, namespace, "task", task_ref
+                        )
                         edges.append(
                             {
                                 "source": node_id,
                                 "target": task_id,
                                 "relationship": "uses",
-                                "weight": calculate_dependency_weight("taskrun", "task", "uses"),
+                                "weight": calculate_dependency_weight(
+                                    "taskrun", "task", "uses"
+                                ),
                             }
                         )
                         stats["edges"] += 1
@@ -11733,7 +12646,9 @@ async def _process_namespace_topology(
 
                 for task in tasks.get("items", []):
                     task_name = task.get("metadata", {}).get("name", "")
-                    node_id = generate_node_id(cluster_name, namespace, "task", task_name)
+                    node_id = generate_node_id(
+                        cluster_name, namespace, "task", task_name
+                    )
 
                     node = {
                         "id": node_id,
@@ -11768,7 +12683,9 @@ async def _process_namespace_topology(
                     )
 
     except Exception as e:
-        logger.warning(f"Error processing namespace {namespace} in cluster {cluster_name}: {e}")
+        logger.warning(
+            f"Error processing namespace {namespace} in cluster {cluster_name}: {e}"
+        )
 
     return {"nodes": nodes, "edges": edges, "permissions": permissions, "stats": stats}
 
@@ -11828,7 +12745,9 @@ async def live_system_topology_mapper(
 
         # Filter clusters if specified
         if cluster_names:
-            cluster_clients = {k: v for k, v in cluster_clients.items() if k in cluster_names}
+            cluster_clients = {
+                k: v for k, v in cluster_clients.items() if k in cluster_names
+            }
 
         # Default component types if not specified
         # Note: secrets are NOT included by default due to common RBAC restrictions
@@ -11873,10 +12792,14 @@ async def live_system_topology_mapper(
                     # Apply namespace filter if specified
                     if namespace_filter:
                         pattern = re.compile(namespace_filter)
-                        all_namespaces = [ns for ns in all_namespaces if pattern.search(ns)]
+                        all_namespaces = [
+                            ns for ns in all_namespaces if pattern.search(ns)
+                        ]
 
                 except Exception as e:
-                    logger.warning(f"Failed to list namespaces in cluster {cluster_name}: {e}")
+                    logger.warning(
+                        f"Failed to list namespaces in cluster {cluster_name}: {e}"
+                    )
                     continue
 
                 logger.info(
@@ -11899,7 +12822,9 @@ async def live_system_topology_mapper(
                     for ns in all_namespaces
                 ]
 
-                namespace_results = await asyncio.gather(*namespace_tasks, return_exceptions=True)
+                namespace_results = await asyncio.gather(
+                    *namespace_tasks, return_exceptions=True
+                )
 
                 # Aggregate results from all namespaces
                 for i, result in enumerate(namespace_results):
@@ -11913,7 +12838,9 @@ async def live_system_topology_mapper(
                     edges.extend(result["edges"])
                     cluster_stats[cluster_name]["nodes"] += result["stats"]["nodes"]
                     cluster_stats[cluster_name]["edges"] += result["stats"]["edges"]
-                    permissions_report["accessible"].extend(result["permissions"]["accessible"])
+                    permissions_report["accessible"].extend(
+                        result["permissions"]["accessible"]
+                    )
                     permissions_report["denied"].extend(result["permissions"]["denied"])
                     permissions_report["errors"].extend(result["permissions"]["errors"])
 
@@ -11977,7 +12904,9 @@ async def live_system_topology_mapper(
                     else 0,
                     "critical_nodes": len(critical_nodes_list),
                     "max_blast_radius": max_reachable,
-                    "critical_nodes_details": critical_nodes_list[:10],  # Top 10 critical nodes
+                    "critical_nodes_details": critical_nodes_list[
+                        :10
+                    ],  # Top 10 critical nodes
                 }
 
         execution_time = time.time() - start_time
@@ -12023,7 +12952,9 @@ async def live_system_topology_mapper(
         return result
 
     except Exception as e:
-        logger.error(f"Unexpected error during topology mapping: {str(e)}", exc_info=True)
+        logger.error(
+            f"Unexpected error during topology mapping: {str(e)}", exc_info=True
+        )
         return {
             "topology": {"nodes": [], "edges": []},
             "summary": {
@@ -12072,7 +13003,9 @@ async def predictive_log_analyzer(
         # Validate parameters
         valid_windows = ["1h", "6h", "24h", "7d"]
         if prediction_window not in valid_windows:
-            raise ValueError(f"Invalid prediction_window. Must be one of: {valid_windows}")
+            raise ValueError(
+                f"Invalid prediction_window. Must be one of: {valid_windows}"
+            )
 
         if not 0.0 <= confidence_threshold <= 1.0:
             raise ValueError("confidence_threshold must be between 0.0 and 1.0")
@@ -12093,7 +13026,9 @@ async def predictive_log_analyzer(
             version_manager = ModelVersionManager(model_manager, training_store)
             persistence_available = True
         except Exception as e:
-            logger.warning(f"ML persistence not available, using ephemeral training: {e}")
+            logger.warning(
+                f"ML persistence not available, using ephemeral training: {e}"
+            )
             persistence_available = False
             model_manager = None
             training_store = None
@@ -12135,7 +13070,9 @@ async def predictive_log_analyzer(
                     if namespaces:
                         # Use user-provided namespaces
                         target_namespaces = namespaces
-                        logger.info(f"Using user-specified namespaces: {target_namespaces}")
+                        logger.info(
+                            f"Using user-specified namespaces: {target_namespaces}"
+                        )
                     else:
                         # Auto-detect active namespaces, prioritizing those with tekton/pipeline activity
                         all_ns = await list_namespaces()
@@ -12153,17 +13090,30 @@ async def predictive_log_analyzer(
                         except Exception:
                             # Fallback to alphabetical if tekton detection fails
                             target_namespaces = all_ns[:max_namespaces]
-                        logger.info(f"Auto-detected {len(target_namespaces)} active namespaces")
+                        logger.info(
+                            f"Auto-detected {len(target_namespaces)} active namespaces"
+                        )
 
                     for ns in target_namespaces:
                         try:
-                            pods = k8s_core_api.list_namespaced_pod(namespace=ns, limit=50)
+                            pods = await asyncio.to_thread(
+                                k8s_core_api.list_namespaced_pod,
+                                namespace=ns,
+                                limit=50,
+                            )
                             for pod in pods.items:
                                 # Include Running pods for proactive analysis, plus Failed/Succeeded for historical
-                                if pod.status.phase in ["Running", "Failed", "Succeeded"]:
+                                if pod.status.phase in [
+                                    "Running",
+                                    "Failed",
+                                    "Succeeded",
+                                ]:
                                     try:
-                                        pod_logs = k8s_core_api.read_namespaced_pod_log(
-                                            name=pod.metadata.name, namespace=ns, tail_lines=100
+                                        pod_logs = await asyncio.to_thread(
+                                            k8s_core_api.read_namespaced_pod_log,
+                                            name=pod.metadata.name,
+                                            namespace=ns,
+                                            tail_lines=100,
                                         )
                                         all_logs.extend(pod_logs.split("\n"))
                                     except ApiException:
@@ -12177,7 +13127,9 @@ async def predictive_log_analyzer(
 
         # Return early if no logs collected - never fabricate analysis from fake data
         if not all_logs:
-            logger.warning("No logs collected from any source - returning insufficient data")
+            logger.warning(
+                "No logs collected from any source - returning insufficient data"
+            )
             result["trend_analysis"]["error_rate_trend"] = "no_data"
             result["model_performance"] = {
                 "accuracy": None,
@@ -12211,13 +13163,21 @@ async def predictive_log_analyzer(
                 for ns in target_namespaces:
                     try:
                         # Collect from Kubernetes events - use dict format for FailureEventCollector
-                        events_as_dicts = await _get_namespace_events_as_dicts(ns, limit=100)
+                        events_as_dicts = await _get_namespace_events_as_dicts(
+                            ns, limit=100
+                        )
                         if events_as_dicts:
-                            count = failure_collector.collect_from_events(events_as_dicts, ns)
-                            logger.debug(f"Collected {count} failure labels from events in {ns}")
+                            count = failure_collector.collect_from_events(
+                                events_as_dicts, ns
+                            )
+                            logger.debug(
+                                f"Collected {count} failure labels from events in {ns}"
+                            )
 
                         # Collect from pod statuses
-                        pods = k8s_core_api.list_namespaced_pod(namespace=ns, limit=50)
+                        pods = await asyncio.to_thread(
+                            k8s_core_api.list_namespaced_pod, namespace=ns, limit=50
+                        )
                         failure_collector.collect_from_pod_status(pods.items, ns)
                     except Exception as e:
                         logger.debug(f"Failed to collect failure events from {ns}: {e}")
@@ -12226,7 +13186,8 @@ async def predictive_log_analyzer(
                 from datetime import timedelta
 
                 historical_failures = training_store.get_failure_labels_in_window(
-                    start_time=datetime.now() - timedelta(hours=2), end_time=datetime.now()
+                    start_time=datetime.now() - timedelta(hours=2),
+                    end_time=datetime.now(),
                 )
 
                 # Store log samples first so they get database IDs for correlation
@@ -12235,8 +13196,12 @@ async def predictive_log_analyzer(
                     if idx < 500:  # Limit to avoid excessive storage
                         sample_data = {
                             "timestamp": row.get("timestamp"),
-                            "namespace": target_namespaces[0] if target_namespaces else "unknown",
-                            "features": features[idx].tolist() if idx < len(features) else [],
+                            "namespace": target_namespaces[0]
+                            if target_namespaces
+                            else "unknown",
+                            "features": features[idx].tolist()
+                            if idx < len(features)
+                            else [],
                             "raw_message": str(row.get("raw_message", ""))[:500],
                             "log_level": row.get("log_level"),
                             "error_indicators": int(row.get("error_indicators", 0)),
@@ -12258,8 +13223,12 @@ async def predictive_log_analyzer(
                         stored_samples, historical_failures, time_window_minutes=30
                     )
                     if correlations:
-                        labels = build_labels_from_correlations(correlations, len(log_df))
-                        logger.info(f"Created {len(correlations)} log-failure correlations")
+                        labels = build_labels_from_correlations(
+                            correlations, len(log_df)
+                        )
+                        logger.info(
+                            f"Created {len(correlations)} log-failure correlations"
+                        )
 
             except Exception as e:
                 logger.warning(f"Failed to collect/correlate failure events: {e}")
@@ -12279,8 +13248,12 @@ async def predictive_log_analyzer(
                 result["model_info"].update(
                     {
                         "model_id": model_id,
-                        "loaded_from_cache": model_metadata.get("loaded_from_cache", False),
-                        "training_samples": model_metadata.get("training_samples", len(features)),
+                        "loaded_from_cache": model_metadata.get(
+                            "loaded_from_cache", False
+                        ),
+                        "training_samples": model_metadata.get(
+                            "training_samples", len(features)
+                        ),
                         "has_failure_labels": labels is not None and len(labels) > 0,
                         "created_at": model_metadata.get("created_at"),
                     }
@@ -12300,7 +13273,9 @@ async def predictive_log_analyzer(
                         }
                     )
             except Exception as e:
-                logger.warning(f"Persistence-based training failed, falling back to ephemeral: {e}")
+                logger.warning(
+                    f"Persistence-based training failed, falling back to ephemeral: {e}"
+                )
                 anomaly_model = train_anomaly_model(features)
         else:
             # Fallback to ephemeral training
@@ -12313,7 +13288,9 @@ async def predictive_log_analyzer(
         # Note: without labeled validation data, precision/recall cannot be computed
         if result["model_performance"]["accuracy"] == 0.0:
             normal_predictions = anomaly_predictions == 1
-            accuracy = np.mean(normal_predictions) if len(normal_predictions) > 0 else 0.0
+            accuracy = (
+                np.mean(normal_predictions) if len(normal_predictions) > 0 else 0.0
+            )
             result["model_performance"].update(
                 {
                     "accuracy": float(accuracy),
@@ -12330,7 +13307,9 @@ async def predictive_log_analyzer(
             lines_per_ns = max(1, len(anomaly_scores) // max(1, len(target_namespaces)))
             threshold = -0.5  # Typical anomaly threshold for Isolation Forest
 
-            for i, ns in enumerate(target_namespaces[: min(10, len(target_namespaces))]):
+            for i, ns in enumerate(
+                target_namespaces[: min(10, len(target_namespaces))]
+            ):
                 start_idx = i * lines_per_ns
                 end_idx = min(start_idx + lines_per_ns, len(anomaly_scores))
                 if start_idx < len(anomaly_scores):
@@ -12356,8 +13335,11 @@ async def predictive_log_analyzer(
             try:
                 from datetime import timedelta
 
-                historical_failures_for_analysis = training_store.get_failure_labels_in_window(
-                    start_time=datetime.now() - timedelta(hours=24), end_time=datetime.now()
+                historical_failures_for_analysis = (
+                    training_store.get_failure_labels_in_window(
+                        start_time=datetime.now() - timedelta(hours=24),
+                        end_time=datetime.now(),
+                    )
                 )
             except Exception as e:
                 logger.debug(f"Could not retrieve historical failures: {e}")
@@ -12402,7 +13384,9 @@ async def predictive_log_analyzer(
         # Performance trend based on response times and timeouts
         performance_indicators = (
             log_df["raw_message"]
-            .str.contains(r"timeout|slow|latency|performance|delay", case=False, na=False)
+            .str.contains(
+                r"timeout|slow|latency|performance|delay", case=False, na=False
+            )
             .sum()
         )
 
@@ -12412,11 +13396,16 @@ async def predictive_log_analyzer(
             result["trend_analysis"]["performance_trend"] = "stable"
 
         # Update has_failure_labels to correctly reflect historical failures used
-        result["model_info"]["has_failure_labels"] = (labels is not None and len(labels) > 0) or (
-            historical_failures_for_analysis and len(historical_failures_for_analysis) > 0
+        result["model_info"]["has_failure_labels"] = (
+            labels is not None and len(labels) > 0
+        ) or (
+            historical_failures_for_analysis
+            and len(historical_failures_for_analysis) > 0
         )
 
-        logger.info(f"Predictive analysis complete: {len(predictions)} predictions generated")
+        logger.info(
+            f"Predictive analysis complete: {len(predictions)} predictions generated"
+        )
         return result
 
     except Exception as e:
@@ -12490,7 +13479,11 @@ async def manage_prediction_training_data(
         training_store = TrainingDataStore()
         model_manager = ModelPersistenceManager()
 
-        result = {"action": action, "success": True, "timestamp": datetime.now().isoformat()}
+        result = {
+            "action": action,
+            "success": True,
+            "timestamp": datetime.now().isoformat(),
+        }
 
         if action == "stats":
             # Get comprehensive training data statistics
@@ -12565,14 +13558,19 @@ async def manage_prediction_training_data(
                 "failure_time": datetime.now().isoformat(),
                 "detection_source": "manual",
                 "error_category": failure_type,
-                "metadata": {"source": "manage_prediction_training_data", "added_by": "user"},
+                "metadata": {
+                    "source": "manage_prediction_training_data",
+                    "added_by": "user",
+                },
             }
 
             label_id = training_store.store_failure_label(label)
 
             if label_id:
                 result["label_id"] = label_id
-                result["message"] = f"Successfully added failure label for '{failure_type}'"
+                result["message"] = (
+                    f"Successfully added failure label for '{failure_type}'"
+                )
             else:
                 result["success"] = False
                 result["message"] = "Failed to add label (may be duplicate)"
@@ -12612,17 +13610,25 @@ async def manage_prediction_training_data(
 
                     # Collect from events - use dict format for FailureEventCollector
                     try:
-                        events_as_dicts = await _get_namespace_events_as_dicts(ns, limit=200)
+                        events_as_dicts = await _get_namespace_events_as_dicts(
+                            ns, limit=200
+                        )
                         if events_as_dicts:
-                            count = failure_collector.collect_from_events(events_as_dicts, ns)
+                            count = failure_collector.collect_from_events(
+                                events_as_dicts, ns
+                            )
                             collected_counts["from_events"] += count
                     except Exception as e:
                         logger.debug(f"Failed to collect events from {ns}: {e}")
 
                     # Collect from pod statuses
                     try:
-                        pods = k8s_core_api.list_namespaced_pod(namespace=ns, limit=100)
-                        count = failure_collector.collect_from_pod_status(pods.items, ns)
+                        pods = await asyncio.to_thread(
+                            k8s_core_api.list_namespaced_pod, namespace=ns, limit=100
+                        )
+                        count = failure_collector.collect_from_pod_status(
+                            pods.items, ns
+                        )
                         collected_counts["from_pods"] += count
                     except Exception as e:
                         logger.debug(f"Failed to collect pod statuses from {ns}: {e}")
@@ -12635,7 +13641,8 @@ async def manage_prediction_training_data(
                             failed_prs = [
                                 pr
                                 for pr in prs
-                                if pr.get("status") in ["Failed", "Error", "CouldntGetTask"]
+                                if pr.get("status")
+                                in ["Failed", "Error", "CouldntGetTask"]
                             ]
                             count = failure_collector.collect_from_pipeline_runs(
                                 [
@@ -12653,7 +13660,11 @@ async def manage_prediction_training_data(
                                             "name": pr.get("name"),
                                             "creationTimestamp": pr.get("started_at"),
                                         },
-                                        "spec": {"pipelineRef": {"name": pr.get("pipeline", "")}},
+                                        "spec": {
+                                            "pipelineRef": {
+                                                "name": pr.get("pipeline", "")
+                                            }
+                                        },
                                     }
                                     for pr in failed_prs
                                 ],
@@ -12681,7 +13692,9 @@ async def manage_prediction_training_data(
         elif action == "cleanup":
             # Clean up old training data
             deleted_data = training_store.cleanup_old_data(max_age_days=90)
-            deleted_models = model_manager.cleanup_old_models(max_age_days=30, keep_min=3)
+            deleted_models = model_manager.cleanup_old_models(
+                max_age_days=30, keep_min=3
+            )
 
             result["cleanup_results"] = {
                 "training_data_deleted": deleted_data,
@@ -12756,13 +13769,17 @@ def _is_node_active(node_identifier: str, active_nodes: set) -> bool:
         return True
 
     # Try matching without port suffix
-    node_without_port = node_identifier.split(":")[0] if ":" in node_identifier else node_identifier
+    node_without_port = (
+        node_identifier.split(":")[0] if ":" in node_identifier else node_identifier
+    )
     if node_without_port in active_nodes:
         return True
 
     # Try matching the hostname part (e.g., ip-10-206-24-150.ec2.internal)
     for active_node in active_nodes:
-        if node_identifier.startswith(active_node) or active_node.startswith(node_identifier):
+        if node_identifier.startswith(active_node) or active_node.startswith(
+            node_identifier
+        ):
             return True
         # Handle case where Prometheus uses IP and K8s uses hostname
         if node_without_port in active_node or active_node in node_without_port:
@@ -12771,13 +13788,15 @@ def _is_node_active(node_identifier: str, active_nodes: set) -> bool:
     return False
 
 
-async def _analyze_node_resources_new(trend_period: str, forecast_horizon: str, log) -> List[Dict]:
+async def _analyze_node_resources_new(
+    trend_period: str, forecast_horizon: str, log
+) -> List[Dict]:
     """Analyze node-level resource utilization using Prometheus query method."""
     try:
         from datetime import timedelta
 
         # Get currently active nodes to filter out historical/terminated nodes
-        active_nodes = _get_active_node_names()
+        active_nodes = await asyncio.to_thread(_get_active_node_names)
         log.info(f"Found {len(active_nodes)} active nodes from Kubernetes API")
 
         # Calculate time range for trend analysis
@@ -12817,16 +13836,22 @@ async def _analyze_node_resources_new(trend_period: str, forecast_horizon: str, 
                     values = [float(point[1]) for point in metric.get("values", [])]
 
                     if values:
-                        forecast_result = simple_linear_forecast(values, forecast_points)
+                        forecast_result = simple_linear_forecast(
+                            values, forecast_points
+                        )
                         current_usage = values[-1] if values else 0
 
                         # Predict exhaustion time
                         predicted_exhaustion = None
                         if forecast_result["growth_rate"] > 0:
                             # Calculate when it might reach 90%
-                            points_to_90 = (90 - current_usage) / forecast_result["growth_rate"]
+                            points_to_90 = (90 - current_usage) / forecast_result[
+                                "growth_rate"
+                            ]
                             if points_to_90 > 0:
-                                exhaustion_time = end_time + timedelta(minutes=5 * points_to_90)
+                                exhaustion_time = end_time + timedelta(
+                                    minutes=5 * points_to_90
+                                )
                                 predicted_exhaustion = exhaustion_time.isoformat()
 
                         forecasts.append(
@@ -12836,7 +13861,10 @@ async def _analyze_node_resources_new(trend_period: str, forecast_horizon: str, 
                                     "node": node,
                                     "metric": "cpu_utilization_percent",
                                 },
-                                "current_usage": {"value": current_usage, "unit": "percent"},
+                                "current_usage": {
+                                    "value": current_usage,
+                                    "unit": "percent",
+                                },
                                 "predicted_exhaustion": predicted_exhaustion,
                                 "growth_rate": {
                                     "value": forecast_result["growth_rate"],
@@ -12876,14 +13904,20 @@ async def _analyze_node_resources_new(trend_period: str, forecast_horizon: str, 
                     values = [float(point[1]) for point in metric.get("values", [])]
 
                     if values:
-                        forecast_result = simple_linear_forecast(values, forecast_points)
+                        forecast_result = simple_linear_forecast(
+                            values, forecast_points
+                        )
                         current_usage = values[-1] if values else 0
 
                         predicted_exhaustion = None
                         if forecast_result["growth_rate"] > 0:
-                            points_to_90 = (90 - current_usage) / forecast_result["growth_rate"]
+                            points_to_90 = (90 - current_usage) / forecast_result[
+                                "growth_rate"
+                            ]
                             if points_to_90 > 0:
-                                exhaustion_time = end_time + timedelta(minutes=5 * points_to_90)
+                                exhaustion_time = end_time + timedelta(
+                                    minutes=5 * points_to_90
+                                )
                                 predicted_exhaustion = exhaustion_time.isoformat()
 
                         forecasts.append(
@@ -12893,7 +13927,10 @@ async def _analyze_node_resources_new(trend_period: str, forecast_horizon: str, 
                                     "node": node,
                                     "metric": "memory_utilization_percent",
                                 },
-                                "current_usage": {"value": current_usage, "unit": "percent"},
+                                "current_usage": {
+                                    "value": current_usage,
+                                    "unit": "percent",
+                                },
                                 "predicted_exhaustion": predicted_exhaustion,
                                 "growth_rate": {
                                     "value": forecast_result["growth_rate"],
@@ -12939,14 +13976,20 @@ async def _analyze_node_resources_new(trend_period: str, forecast_horizon: str, 
                     values = [float(point[1]) for point in metric.get("values", [])]
 
                     if values:
-                        forecast_result = simple_linear_forecast(values, forecast_points)
+                        forecast_result = simple_linear_forecast(
+                            values, forecast_points
+                        )
                         current_usage = values[-1] if values else 0
 
                         predicted_exhaustion = None
                         if forecast_result["growth_rate"] > 0:
-                            points_to_90 = (90 - current_usage) / forecast_result["growth_rate"]
+                            points_to_90 = (90 - current_usage) / forecast_result[
+                                "growth_rate"
+                            ]
                             if points_to_90 > 0:
-                                exhaustion_time = end_time + timedelta(minutes=5 * points_to_90)
+                                exhaustion_time = end_time + timedelta(
+                                    minutes=5 * points_to_90
+                                )
                                 predicted_exhaustion = exhaustion_time.isoformat()
 
                         forecasts.append(
@@ -12957,7 +14000,10 @@ async def _analyze_node_resources_new(trend_period: str, forecast_horizon: str, 
                                     "mountpoint": mountpoint,
                                     "metric": "disk_utilization_percent",
                                 },
-                                "current_usage": {"value": current_usage, "unit": "percent"},
+                                "current_usage": {
+                                    "value": current_usage,
+                                    "unit": "percent",
+                                },
                                 "predicted_exhaustion": predicted_exhaustion,
                                 "growth_rate": {
                                     "value": forecast_result["growth_rate"],
@@ -12974,7 +14020,9 @@ async def _analyze_node_resources_new(trend_period: str, forecast_horizon: str, 
             log.warning(f"Error fetching disk metrics: {str(e)}")
 
         if filtered_count > 0:
-            log.info(f"Filtered out {filtered_count} metrics from inactive/historical nodes")
+            log.info(
+                f"Filtered out {filtered_count} metrics from inactive/historical nodes"
+            )
 
         return forecasts
 
@@ -13021,7 +14069,9 @@ async def _analyze_cluster_capacity_new(core_api, log) -> Dict[str, Any]:
             cpu_usage_result = await prometheus_query(
                 'avg(100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100))'
             )
-            if cpu_usage_result.get("status") == "success" and cpu_usage_result.get("data"):
+            if cpu_usage_result.get("status") == "success" and cpu_usage_result.get(
+                "data"
+            ):
                 data = cpu_usage_result["data"]
                 if data and len(data) > 0 and "value" in data[0]:
                     cpu_usage_percent = float(data[0]["value"][1])
@@ -13033,7 +14083,9 @@ async def _analyze_cluster_capacity_new(core_api, log) -> Dict[str, Any]:
             memory_usage_result = await prometheus_query(
                 "avg(100 - (avg by (instance) (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100)"
             )
-            if memory_usage_result.get("status") == "success" and memory_usage_result.get("data"):
+            if memory_usage_result.get(
+                "status"
+            ) == "success" and memory_usage_result.get("data"):
                 data = memory_usage_result["data"]
                 if data and len(data) > 0 and "value" in data[0]:
                     memory_usage_percent = float(data[0]["value"][1])
@@ -13068,7 +14120,11 @@ async def _analyze_cluster_capacity_new(core_api, log) -> Dict[str, Any]:
                     0, int((90 - cpu_usage_percent) / max(0.1, cpu_usage_percent / 30))
                 ),
                 "memory_runway_days": max(
-                    0, int((90 - memory_usage_percent) / max(0.1, memory_usage_percent / 30))
+                    0,
+                    int(
+                        (90 - memory_usage_percent)
+                        / max(0.1, memory_usage_percent / 30)
+                    ),
                 ),
             },
         }
@@ -13111,7 +14167,9 @@ async def resource_bottleneck_forecaster(
         Dict: Keys: forecasts, capacity_recommendations, cluster_overview, historical_accuracy.
     """
     try:
-        logger.info(f"Starting resource bottleneck forecasting for horizon: {forecast_horizon}")
+        logger.info(
+            f"Starting resource bottleneck forecasting for horizon: {forecast_horizon}"
+        )
 
         # Default resource types if not specified
         if resource_types is None:
@@ -13121,7 +14179,9 @@ async def resource_bottleneck_forecaster(
         try:
             test_query_result = await prometheus_query("up")
             if test_query_result.get("status") != "success":
-                logger.warning("Could not connect to Prometheus endpoint, using mock data")
+                logger.warning(
+                    "Could not connect to Prometheus endpoint, using mock data"
+                )
                 return {
                     "forecasts": [],
                     "capacity_recommendations": [
@@ -13181,7 +14241,11 @@ async def resource_bottleneck_forecaster(
 
         # Analyze node-level resources
         forecasts = []
-        if "cpu" in resource_types or "memory" in resource_types or "disk" in resource_types:
+        if (
+            "cpu" in resource_types
+            or "memory" in resource_types
+            or "disk" in resource_types
+        ):
             node_forecasts = await _analyze_node_resources_new(
                 trend_analysis_period, forecast_horizon, logger
             )
@@ -13197,7 +14261,8 @@ async def resource_bottleneck_forecaster(
                 node_has_exhaustion = {}
                 for f in node_forecasts:
                     node = f.get("resource_identifier", {}).get(
-                        "node", f.get("resource_identifier", {}).get("instance", "unknown")
+                        "node",
+                        f.get("resource_identifier", {}).get("instance", "unknown"),
                     )
                     usage = f.get("current_usage", {}).get("value", 0)
                     node_max_usage[node] = max(node_max_usage.get(node, 0), usage)
@@ -13207,7 +14272,10 @@ async def resource_bottleneck_forecaster(
                 # Select top nodes: exhaustion-approaching first, then highest utilization
                 sorted_nodes = sorted(
                     node_max_usage.keys(),
-                    key=lambda n: (node_has_exhaustion.get(n, False), node_max_usage[n]),
+                    key=lambda n: (
+                        node_has_exhaustion.get(n, False),
+                        node_max_usage[n],
+                    ),
                     reverse=True,
                 )
                 keep_nodes = set(sorted_nodes[:MAX_NODES])
@@ -13253,10 +14321,19 @@ async def resource_bottleneck_forecaster(
                                         "namespace": namespace,
                                         "metric": "cpu_usage_cores",
                                     },
-                                    "current_usage": {"value": cpu_usage, "unit": "cores"},
+                                    "current_usage": {
+                                        "value": cpu_usage,
+                                        "unit": "cores",
+                                    },
                                     "predicted_exhaustion": None,  # Would need trend analysis
-                                    "growth_rate": {"value": 0, "unit": "cores_per_5min"},
-                                    "contributing_factors": ["pod_scaling", "workload_changes"],
+                                    "growth_rate": {
+                                        "value": 0,
+                                        "unit": "cores_per_5min",
+                                    },
+                                    "contributing_factors": [
+                                        "pod_scaling",
+                                        "workload_changes",
+                                    ],
                                 }
                             )
 
@@ -13268,7 +14345,9 @@ async def resource_bottleneck_forecaster(
                     memory_usage_gb = 0
                     for memory_query in memory_queries:
                         memory_result = await prometheus_query(memory_query)
-                        if memory_result.get("status") == "success" and memory_result.get("data"):
+                        if memory_result.get(
+                            "status"
+                        ) == "success" and memory_result.get("data"):
                             data = memory_result["data"]
                             if data and len(data) > 0:
                                 raw_val = data[0].get("value", [0, "0"])
@@ -13287,7 +14366,10 @@ async def resource_bottleneck_forecaster(
                                     "namespace": namespace,
                                     "metric": "memory_usage_gb",
                                 },
-                                "current_usage": {"value": memory_usage_gb, "unit": "GB"},
+                                "current_usage": {
+                                    "value": memory_usage_gb,
+                                    "unit": "GB",
+                                },
                                 "predicted_exhaustion": None,  # Would need trend analysis
                                 "growth_rate": {"value": 0, "unit": "GB_per_5min"},
                                 "contributing_factors": [
@@ -13315,7 +14397,9 @@ async def resource_bottleneck_forecaster(
                     exhaustion_time = datetime.fromisoformat(
                         forecast["predicted_exhaustion"].replace("Z", "+00:00")
                     )
-                    time_to_exhaustion = exhaustion_time - datetime.now(exhaustion_time.tzinfo)
+                    time_to_exhaustion = exhaustion_time - datetime.now(
+                        exhaustion_time.tzinfo
+                    )
 
                     if time_to_exhaustion.total_seconds() < 3600:  # 1 hour
                         urgency = "critical"
@@ -13385,7 +14469,9 @@ async def resource_bottleneck_forecaster(
         return result
 
     except Exception as e:
-        logger.error(f"Error in resource bottleneck forecasting: {str(e)}", exc_info=True)
+        logger.error(
+            f"Error in resource bottleneck forecasting: {str(e)}", exc_info=True
+        )
         return {
             "forecasts": [],
             "capacity_recommendations": [
@@ -13442,12 +14528,16 @@ async def semantic_log_search(
     Returns:
         Dict: Keys: query_interpretation, search_results, result_summary, suggestions.
     """
-    logger.info(f"Starting semantic log search for query: '{query}' with time_range: {time_range}")
+    logger.info(
+        f"Starting semantic log search for query: '{query}' with time_range: {time_range}"
+    )
 
     try:
         # === Query Understanding and Interpretation ===
         query_interpretation = interpret_semantic_query(query, time_range)
-        logger.info(f"Query interpreted as: {query_interpretation['interpreted_intent']}")
+        logger.info(
+            f"Query interpreted as: {query_interpretation['interpreted_intent']}"
+        )
 
         # === Determine Search Strategy ===
         search_strategy = determine_search_strategy(query_interpretation)
@@ -13460,7 +14550,10 @@ async def semantic_log_search(
         # === Build Search Parameters ===
         search_params = {
             "namespaces": await _get_target_namespaces(
-                namespaces, identified_components, list_namespaces, detect_tekton_namespaces
+                namespaces,
+                identified_components,
+                list_namespaces,
+                detect_tekton_namespaces,
             ),
             "time_range": time_range,
             "severity_levels": severity_levels or ["error", "warn", "info", "debug"],
@@ -13482,7 +14575,9 @@ async def semantic_log_search(
                 pods_info = await list_pods_in_namespace(namespace)
 
                 # Search pod logs with correct arguments
-                for pod_info in pods_info[:5]:  # Limit to 5 pods per namespace for performance
+                for pod_info in pods_info[
+                    :5
+                ]:  # Limit to 5 pods per namespace for performance
                     if isinstance(pod_info, dict) and "error" not in pod_info:
                         try:
                             pod_logs_result = await _search_pod_logs_semantically(
@@ -13497,7 +14592,9 @@ async def semantic_log_search(
                             if pod_logs_result:
                                 namespace_results.extend(pod_logs_result)
                         except Exception as e:
-                            logger.debug(f"Error searching pod logs in {namespace}: {e}")
+                            logger.debug(
+                                f"Error searching pod logs in {namespace}: {e}"
+                            )
                             continue
 
                 # Search events with correct arguments
@@ -13532,7 +14629,9 @@ async def semantic_log_search(
                         if tekton_results:
                             namespace_results.extend(tekton_results)
                     except Exception as e:
-                        logger.debug(f"Error searching Tekton resources in {namespace}: {e}")
+                        logger.debug(
+                            f"Error searching Tekton resources in {namespace}: {e}"
+                        )
 
                 search_results.extend(namespace_results)
 
@@ -13557,7 +14656,9 @@ async def semantic_log_search(
         severity_distribution = analyze_severity_distribution(ranked_results)
 
         # === Generate Suggestions ===
-        suggestions = generate_semantic_suggestions(query_interpretation, ranked_results)
+        suggestions = generate_semantic_suggestions(
+            query_interpretation, ranked_results
+        )
 
         # === Build Final Response ===
         return {
@@ -13637,10 +14738,17 @@ async def what_if_scenario_simulator(
 
         simulation_id = f"sim-{uuid.uuid4().hex[:8]}-{int(datetime.now().timestamp())}"
 
-        logger.info(f"Starting what-if scenario simulation {simulation_id} for {scenario_type}")
+        logger.info(
+            f"Starting what-if scenario simulation {simulation_id} for {scenario_type}"
+        )
 
         # Validate input parameters
-        valid_scenario_types = ["resource_limits", "scaling", "configuration", "deployment"]
+        valid_scenario_types = [
+            "resource_limits",
+            "scaling",
+            "configuration",
+            "deployment",
+        ]
         if scenario_type not in valid_scenario_types:
             return {
                 "simulation_id": simulation_id,
@@ -13676,7 +14784,11 @@ async def what_if_scenario_simulator(
 
         # Set default scope if not provided
         if scope is None:
-            scope = {"clusters": ["current"], "namespaces": ["all"], "components": ["all"]}
+            scope = {
+                "clusters": ["current"],
+                "namespaces": ["all"],
+                "components": ["all"],
+            }
 
         # Collect baseline system data
         baseline_data = await collect_baseline_system_data(
@@ -13684,11 +14796,15 @@ async def what_if_scenario_simulator(
         )
 
         # Build system behavior models
-        behavior_models = await build_system_behavior_models(baseline_data, scenario_type)
+        behavior_models = await build_system_behavior_models(
+            baseline_data, scenario_type
+        )
 
         # Load historical performance data for calibration (using real Prometheus data)
         historical_data = await load_historical_performance_data(
-            scope, simulation_duration, prometheus_query_fn=_execute_prometheus_query_internal
+            scope,
+            simulation_duration,
+            prometheus_query_fn=_execute_prometheus_query_internal,
         )
 
         # Calibrate simulation models with historical data
@@ -13698,15 +14814,27 @@ async def what_if_scenario_simulator(
 
         # Run Monte Carlo simulation for uncertainty quantification
         simulation_results = await run_monte_carlo_simulation(
-            calibrated_models, changes, scenario_type, simulation_duration, risk_tolerance
+            calibrated_models,
+            changes,
+            scenario_type,
+            simulation_duration,
+            risk_tolerance,
         )
 
         # Analyze impact on different system aspects
-        impact_analysis = analyze_system_impact(simulation_results, baseline_data, scenario_type)
+        impact_analysis = analyze_system_impact(
+            simulation_results, baseline_data, scenario_type
+        )
 
         # Identify affected components and their dependency graph
         affected_components = await identify_affected_components(
-            changes, scope, scenario_type, k8s_core_api, k8s_apps_api, list_pods, list_namespaces
+            changes,
+            scope,
+            scenario_type,
+            k8s_core_api,
+            k8s_apps_api,
+            list_pods,
+            list_namespaces,
         )
 
         # Perform risk assessment
@@ -13742,7 +14870,9 @@ async def what_if_scenario_simulator(
             "simulation_quality": simulation_quality,
             "recommendations": recommendations,
             "timestamp": datetime.now().isoformat(),
-            "simulation_duration_seconds": convert_duration_to_seconds(simulation_duration),
+            "simulation_duration_seconds": convert_duration_to_seconds(
+                simulation_duration
+            ),
         }
 
         logger.info(
@@ -13753,7 +14883,9 @@ async def what_if_scenario_simulator(
     except Exception as e:
         logger.error(f"Error in what-if scenario simulation: {str(e)}", exc_info=True)
         return {
-            "simulation_id": simulation_id if "simulation_id" in locals() else "unknown",
+            "simulation_id": simulation_id
+            if "simulation_id" in locals()
+            else "unknown",
             "error": f"Simulation failed: {str(e)}",
             "timestamp": datetime.now().isoformat(),
         }
@@ -13891,7 +15023,9 @@ async def query_kubearchive(
                 message="KubeArchive discovery requires CoreV1Api and CustomObjectsApi",
             )
 
-        availability = await check_kubearchive_availability(kubearchive_endpoint_discovery)
+        availability = await check_kubearchive_availability(
+            kubearchive_endpoint_discovery
+        )
         ka_endpoint = availability.get("endpoint")
         if not availability.get("available"):
             msg = availability.get("message", "KubeArchive not available")
