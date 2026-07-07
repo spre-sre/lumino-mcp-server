@@ -11,7 +11,6 @@ import os
 import sys
 import logging
 import importlib.util
-import asyncio
 from pathlib import Path
 
 # Add the src directory to the Python path
@@ -21,8 +20,8 @@ sys.path.insert(0, str(src_path))
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 logger = logging.getLogger("lumino-mcp-main")
@@ -42,13 +41,13 @@ def main():
         mcp = server_mcp.mcp
 
         # Check if running in Kubernetes (via environment variable)
-        if os.getenv('KUBERNETES_NAMESPACE') or os.getenv('K8S_NAMESPACE'):
+        if os.getenv("KUBERNETES_NAMESPACE") or os.getenv("K8S_NAMESPACE"):
             logger.info("Detected Kubernetes environment - running streamable HTTP server")
             logger.info("Note: Server will bind to 127.0.0.1:8000 (limitation of MCP SDK 1.10.1)")
             logger.info("Using modified health checks to work with localhost binding")
 
             # Use the standard MCP run method with streamable-http transport
-            mcp.run(transport='streamable-http')
+            mcp.run(transport="streamable-http")
 
         else:
             logger.info("Running in local environment - using stdio transport")
