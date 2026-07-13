@@ -680,7 +680,7 @@ class KubeArchiveClient:
             config = self.k8s_core_api.api_client.configuration
             api_key = config.api_key.get('authorization')
             if api_key:
-                if api_key.startswith('Bearer '):
+                if api_key.lower().startswith('bearer '):
                     logger.info("Using token from existing Kubernetes client")
                     return api_key[7:]
                 return api_key
