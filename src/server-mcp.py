@@ -403,6 +403,57 @@ _namespace_cache_lock = asyncio.Lock()
 _NAMESPACE_CACHE_TTL = 86400  # 1 day in seconds
 
 
+# ============================================================================
+# SAFE REGEX COMPILATION (ReDoS mitigation)
+# ============================================================================
+
+# Maximum allowed length for user-supplied regex patterns (namespace filters, etc.)
+_MAX_REGEX_PATTERN_LEN = 200
+
+# Detects nested quantifiers that cause catastrophic backtracking (ReDoS).
+# Catches patterns like (a+)+, (a*)+, (a+)*, ([^x]+)+, (?:a+)+, etc.
+# Also catches overlapping-alternation quantifiers like (a|aa)+, (x|xx|xxx)+.
+# Excludes bounded quantifiers like (\d{3})+ which cannot cause catastrophic
+# backtracking because {n} and {n,m} with small m are fixed-width.
+_NESTED_QUANTIFIER_RE = re.compile(
+    r"\([^)]*[+*]\s*\)\s*[+*{]"  # (x+)+ or (x*){2,} -- inner unbounded
+    r"|\([^)]*\{\d+,\}\s*\)\s*[+*{]"  # (x{2,})+ -- inner open-ended {n,}
+    r"|\)\s*[+*{]\s*\)\s*[+*{]"  # nested groups: )+ )+
+    r"|\([^)]*\|[^)]*\)\s*[+*{]"  # overlapping alternation: (a|aa)+
+)
+
+
+def _safe_compile_namespace_filter(pattern: str) -> re.Pattern:
+    """Compile a namespace filter regex with ReDoS protections.
+
+    Validates the pattern length and checks for nested quantifiers
+    that cause catastrophic backtracking before compiling.
+
+    Args:
+        pattern: User-supplied regex pattern string.
+
+    Returns:
+        Compiled regex pattern.
+
+    Raises:
+        ValueError: If the pattern is too long or contains dangerous constructs.
+        re.error: If the pattern is not valid regex syntax.
+    """
+    if len(pattern) > _MAX_REGEX_PATTERN_LEN:
+        raise ValueError(
+            f"Namespace filter pattern too long "
+            f"({len(pattern)} chars, max {_MAX_REGEX_PATTERN_LEN})"
+        )
+
+    if _NESTED_QUANTIFIER_RE.search(pattern):
+        raise ValueError(
+            "Namespace filter contains nested quantifiers "
+            "that may cause catastrophic backtracking (ReDoS)"
+        )
+
+    return re.compile(pattern)
+
+
 def _is_running_in_cluster() -> bool:
     """Check if we're running inside a Kubernetes cluster."""
     return os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token")
@@ -4880,7 +4931,7 @@ async def _process_prometheus_results(
         # Apply namespace filtering if specified
         if namespace_filter:
             try:
-                namespace_pattern = re.compile(namespace_filter)
+                namespace_pattern = _safe_compile_namespace_filter(namespace_filter)
                 filtered_results = []
 
                 for result in raw_results:
@@ -4892,7 +4943,7 @@ async def _process_prometheus_results(
                 raw_results = filtered_results
                 logger.info(f"Applied namespace filter '{namespace_filter}', {len(raw_results)} results remain")
 
-            except re.error as e:
+            except (re.error, ValueError) as e:
                 logger.warning(f"Invalid namespace filter regex '{namespace_filter}': {e}")
 
         # Apply limit if specified
@@ -10667,8 +10718,11 @@ async def live_system_topology_mapper(
 
                     # Apply namespace filter if specified
                     if namespace_filter:
-                        pattern = re.compile(namespace_filter)
-                        all_namespaces = [ns for ns in all_namespaces if pattern.search(ns)]
+                        try:
+                            pattern = _safe_compile_namespace_filter(namespace_filter)
+                            all_namespaces = [ns for ns in all_namespaces if pattern.search(ns)]
+                        except (re.error, ValueError) as e:
+                            logger.warning(f"Invalid namespace filter regex '{namespace_filter}': {e}")
 
                 except Exception as e:
                     logger.warning(f"Failed to list namespaces in cluster {cluster_name}: {e}")
