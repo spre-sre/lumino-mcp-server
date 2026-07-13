@@ -19,6 +19,9 @@ import tempfile
 import subprocess
 import socket
 import yaml
+import re
+import atexit
+import signal
 from typing import Dict, List, Optional, Any, Tuple, Union
 from datetime import datetime
 from kubernetes import client
@@ -112,6 +115,10 @@ class KubeArchiveEndpointDiscovery:
         self._port_forward_port: Optional[int] = None
         self._discovered_namespace: Optional[str] = None
         self._discovered_port: Optional[int] = None
+        self._atexit_registered = False
+        self._signal_handlers_registered = False
+        self._original_sigterm_handler = None
+        self._original_sigint_handler = None
 
     async def discover_endpoint(self, force_refresh: bool = False) -> Optional[str]:
         """
@@ -548,6 +555,9 @@ class KubeArchiveEndpointDiscovery:
             self._port_forward_port = local_port
             local_endpoint = f"{protocol}://localhost:{local_port}"
 
+            # Register cleanup handlers
+            self._register_cleanup_handlers()
+
             logger.info(f"✓ Port-forward established: {local_endpoint} -> {in_cluster_endpoint}")
             return local_endpoint
 
@@ -577,8 +587,67 @@ class KubeArchiveEndpointDiscovery:
                 self._port_forward_process = None
                 self._port_forward_port = None
 
+        self._unregister_cleanup_handlers()
+
+    def _register_cleanup_handlers(self) -> None:
+        """Register atexit and signal handlers for cleanup."""
+        if not self._atexit_registered:
+            atexit.register(self.stop_port_forward)
+            self._atexit_registered = True
+
+        if not self._signal_handlers_registered:
+            try:
+                self._original_sigterm_handler = signal.signal(signal.SIGTERM, self._signal_handler)
+                self._original_sigint_handler = signal.signal(signal.SIGINT, self._signal_handler)
+                self._signal_handlers_registered = True
+            except (ValueError, OSError) as e:
+                logger.debug(f"Could not register signal handlers: {e}")
+
+    def _unregister_cleanup_handlers(self) -> None:
+        """Unregister atexit and signal handlers."""
+        if self._atexit_registered:
+            try:
+                atexit.unregister(self.stop_port_forward)
+                self._atexit_registered = False
+            except Exception as e:
+                logger.debug(f"Error unregistering atexit handler: {e}")
+
+        if self._signal_handlers_registered:
+            try:
+                if self._original_sigterm_handler is not None:
+                    signal.signal(signal.SIGTERM, self._original_sigterm_handler)
+                if self._original_sigint_handler is not None:
+                    signal.signal(signal.SIGINT, self._original_sigint_handler)
+                self._signal_handlers_registered = False
+            except (ValueError, OSError) as e:
+                logger.debug(f"Error restoring signal handlers: {e}")
+
+    def _signal_handler(self, signum: int, frame) -> None:
+        """Handle signals by cleaning up port-forward and calling original handler."""
+        logger.debug(f"Received signal {signum}, cleaning up port-forward")
+        self.stop_port_forward()
+
+        # Call the original handler if it exists
+        original_handler = None
+        if signum == signal.SIGTERM:
+            original_handler = self._original_sigterm_handler
+        elif signum == signal.SIGINT:
+            original_handler = self._original_sigint_handler
+
+        if original_handler and callable(original_handler):
+            original_handler(signum, frame)
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit: stop port-forward process."""
+        self.stop_port_forward()
+        return False
+
     def __del__(self):
-        """Cleanup: stop port-forward process."""
+        """Cleanup: stop port-forward process (last resort fallback)."""
         self.stop_port_forward()
 
     def clear_cache(self) -> None:

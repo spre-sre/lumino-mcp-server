@@ -522,6 +522,33 @@ KubeArchive authentication uses the following priority chain:
 4. OpenShift `oc whoami -t` token (for OpenShift clusters)
 5. Auto-created short-lived service account token (`kubectl create token`, 1-hour duration, Kubernetes only)
 
+### Resource Management & Cleanup
+
+The `KubeArchiveEndpointDiscovery` class implements robust subprocess cleanup for `kubectl port-forward` processes to prevent resource leaks.
+
+**Recommended Usage: Context Manager**
+
+Use the `with` statement for deterministic cleanup:
+
+```python
+from src.helpers.kubearchive_integration import KubeArchiveEndpointDiscovery
+
+with KubeArchiveEndpointDiscovery(k8s_core_api, k8s_custom_api) as discovery:
+    endpoint = await discovery.discover_endpoint()
+    # Use the endpoint...
+    # Port-forward subprocess automatically cleaned up on exit
+```
+
+**Automatic Cleanup Layers**
+
+When used without explicit context management, the class provides three fallback cleanup mechanisms:
+
+1. **`atexit` handler** — Cleans up port-forward on normal interpreter shutdown
+2. **Signal handlers (`SIGTERM`/`SIGINT`)** — Graceful cleanup on termination, chains to original handlers
+3. **`__del__` finalizer** — Last-resort fallback (not guaranteed timing)
+
+The context manager approach is preferred for deterministic resource cleanup.
+
 ### KubeArchive Configuration
 
 See the [Configuration](#configuration) section above for `KUBEARCHIVE_HOST` and `KUBEARCHIVE_ENABLED` environment variables.
