@@ -10,6 +10,7 @@ for accessing historical resource states and logs.
 
 import asyncio
 import os
+import re
 import logging
 import aiohttp
 import ssl
@@ -1693,7 +1694,6 @@ def normalize_to_rfc3339(value: str) -> str:
     
     # Try parsing as date only (various formats)
     if dt is None:
-        import re
         # Match patterns like "2024-01-15", "2024-1-5", "2024-01-5", "2024-1-15"
         date_match = re.match(r'^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$', value)
         if date_match:
