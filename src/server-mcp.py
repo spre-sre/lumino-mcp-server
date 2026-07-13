@@ -213,42 +213,6 @@ from helpers.kubearchive_integration import (
     setup_kubearchive_client
 )
 
-# Configure Kubernetes client
-try:
-    config.load_incluster_config()
-    # logger.info("Loaded Kubernetes configuration from cluster")
-except config.ConfigException:
-    config.load_kube_config()
-    logger.info("Loaded Kubernetes configuration from local kubeconfig")
-
-k8s_core_api = client.CoreV1Api()
-k8s_apps_api = client.AppsV1Api()
-k8s_custom_api = client.CustomObjectsApi()
-k8s_storage_api = client.StorageV1Api()
-k8s_batch_api = client.BatchV1Api()
-
-# Initialize NetworkingV1Api for Ingress support (for KubeArchive discovery on plain Kubernetes)
-try:
-    k8s_networking_api = client.NetworkingV1Api()
-except Exception as e:
-    logger.warning(f"Failed to initialize NetworkingV1Api: {e}")
-    k8s_networking_api = None
-
-if k8s_core_api is not None and k8s_custom_api is not None:
-    kubearchive_endpoint_discovery = KubeArchiveEndpointDiscovery(
-        k8s_core_api=k8s_core_api,
-        k8s_custom_api=k8s_custom_api,
-        k8s_networking_api=k8s_networking_api,
-        auto_port_forward=True,
-    )
-else:
-    kubearchive_endpoint_discovery = None
-
-# KubeArchive host discovery cache (Issue #8)
-_kubearchive_host_cache: Dict[str, Any] = {"host": None, "ts": 0}
-KUBEARCHIVE_CACHE_TTL_SEC = 300
-
-
 # Create a decorator to add tool execution logging
 def log_tool_execution(func):
     """Decorator to log tool execution with tool name."""
@@ -340,6 +304,23 @@ except Exception as e:
     k8s_batch_api = None
     k8s_storage_api = None
     k8s_autoscaling_api = None
+
+# Initialize NetworkingV1Api for Ingress support (for KubeArchive discovery on plain Kubernetes)
+try:
+    k8s_networking_api = client.NetworkingV1Api()
+except Exception as e:
+    logger.warning(f"Failed to initialize NetworkingV1Api: {e}")
+    k8s_networking_api = None
+
+if k8s_core_api is not None and k8s_custom_api is not None:
+    kubearchive_endpoint_discovery = KubeArchiveEndpointDiscovery(
+        k8s_core_api=k8s_core_api,
+        k8s_custom_api=k8s_custom_api,
+        k8s_networking_api=k8s_networking_api,
+        auto_port_forward=True,
+    )
+else:
+    kubearchive_endpoint_discovery = None
 
 
 # Prometheus endpoints configuration (local Tekton components)
