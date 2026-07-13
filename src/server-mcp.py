@@ -1263,7 +1263,10 @@ async def get_kubernetes_resource(
 
         elif resource_type in storage_resources:
             # Cluster-scoped storage resources
-            method_name, api_version = storage_resources[resource_type]
+            # StorageV1Api uses read_storage_class (singular) while the dict
+            # stores the plural 'storage_classes' for the supported-types list.
+            # Dynamic dispatch via method_name[:-1] doesn't work here because
+            # 'storage_classes'[:-1] == 'storage_classe', not 'storage_class'.
             resource_obj = await asyncio.to_thread(
                 k8s_storage_api.read_storage_class, name=name
             )
