@@ -18,6 +18,7 @@ import re
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timedelta
+from contextlib import contextmanager
 from typing import Dict, List, Any, Optional, Tuple
 import numpy as np
 
@@ -626,90 +627,89 @@ class TrainingDataStore:
 
     def _init_database(self) -> None:
         """Initialize SQLite database schema."""
-        conn = sqlite3.connect(str(self.db_path))
-        cursor = conn.cursor()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
 
-        # Log samples table - includes cluster_id for multi-cluster support
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS log_samples (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sample_hash TEXT UNIQUE,
-                cluster_id TEXT,
-                timestamp TEXT,
-                namespace TEXT,
-                pod_name TEXT,
-                features BLOB,
-                raw_message TEXT,
-                log_level TEXT,
-                error_indicators INTEGER,
-                message_entropy REAL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+            # Log samples table - includes cluster_id for multi-cluster support
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS log_samples (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sample_hash TEXT UNIQUE,
+                    cluster_id TEXT,
+                    timestamp TEXT,
+                    namespace TEXT,
+                    pod_name TEXT,
+                    features BLOB,
+                    raw_message TEXT,
+                    log_level TEXT,
+                    error_indicators INTEGER,
+                    message_entropy REAL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
-        # Failure labels table - includes cluster_id for multi-cluster support
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS failure_labels (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                failure_id TEXT UNIQUE,
-                cluster_id TEXT,
-                failure_type TEXT,
-                severity TEXT,
-                namespace TEXT,
-                resource_name TEXT,
-                resource_type TEXT,
-                failure_time TEXT,
-                detection_source TEXT,
-                error_category TEXT,
-                metadata TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+            # Failure labels table - includes cluster_id for multi-cluster support
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS failure_labels (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    failure_id TEXT UNIQUE,
+                    cluster_id TEXT,
+                    failure_type TEXT,
+                    severity TEXT,
+                    namespace TEXT,
+                    resource_name TEXT,
+                    resource_type TEXT,
+                    failure_time TEXT,
+                    detection_source TEXT,
+                    error_category TEXT,
+                    metadata TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
-        # Log-Failure correlation table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS log_failure_correlations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                log_sample_id INTEGER REFERENCES log_samples(id),
-                failure_label_id INTEGER REFERENCES failure_labels(id),
-                cluster_id TEXT,
-                correlation_score REAL,
-                time_delta_seconds INTEGER,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(log_sample_id, failure_label_id)
-            )
-        """)
+            # Log-Failure correlation table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS log_failure_correlations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    log_sample_id INTEGER REFERENCES log_samples(id),
+                    failure_label_id INTEGER REFERENCES failure_labels(id),
+                    cluster_id TEXT,
+                    correlation_score REAL,
+                    time_delta_seconds INTEGER,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(log_sample_id, failure_label_id)
+                )
+            """)
 
-        # Training run history - includes cluster_id
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS training_runs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                model_id TEXT,
-                cluster_id TEXT,
-                training_started TEXT,
-                training_completed TEXT,
-                samples_used INTEGER,
-                labels_used INTEGER,
-                performance_metrics TEXT,
-                trigger_reason TEXT,
-                status TEXT
-            )
-        """)
+            # Training run history - includes cluster_id
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS training_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    model_id TEXT,
+                    cluster_id TEXT,
+                    training_started TEXT,
+                    training_completed TEXT,
+                    samples_used INTEGER,
+                    labels_used INTEGER,
+                    performance_metrics TEXT,
+                    trigger_reason TEXT,
+                    status TEXT
+                )
+            """)
 
-        # Create indexes
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_log_samples_namespace ON log_samples(namespace)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_log_samples_timestamp ON log_samples(timestamp)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_log_samples_cluster ON log_samples(cluster_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_failure_labels_type ON failure_labels(failure_type)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_failure_labels_time ON failure_labels(failure_time)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_failure_labels_namespace ON failure_labels(namespace)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_failure_labels_cluster ON failure_labels(cluster_id)")
+            # Create indexes
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_log_samples_namespace ON log_samples(namespace)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_log_samples_timestamp ON log_samples(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_log_samples_cluster ON log_samples(cluster_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_failure_labels_type ON failure_labels(failure_type)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_failure_labels_time ON failure_labels(failure_time)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_failure_labels_namespace ON failure_labels(namespace)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_failure_labels_cluster ON failure_labels(cluster_id)")
 
-        # Migration: Add cluster_id column to existing tables if not present
-        self._migrate_add_cluster_id(cursor)
+            # Migration: Add cluster_id column to existing tables if not present
+            self._migrate_add_cluster_id(cursor)
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
         logger.debug(f"Initialized training data store at {self.db_path}")
 
@@ -734,9 +734,18 @@ class TrainingDataStore:
             except sqlite3.Error as e:
                 logger.debug(f"Migration for {table}: {e}")
 
-    def _get_connection(self) -> sqlite3.Connection:
-        """Get a database connection."""
-        return sqlite3.connect(str(self.db_path))
+    @contextmanager
+    def _get_connection(self):
+        """Get a database connection as a context manager.
+
+        Yields:
+            sqlite3.Connection that is guaranteed to close on block exit.
+        """
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def store_log_sample(self, sample: Dict[str, Any], cluster_id: Optional[str] = None) -> Optional[int]:
         """Store a preprocessed log sample.
@@ -766,35 +775,33 @@ class TrainingDataStore:
             elif isinstance(features, list):
                 features_blob = np.array(features).tobytes()
 
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
 
-        try:
-            cursor.execute("""
-                INSERT OR IGNORE INTO log_samples
-                (sample_hash, cluster_id, timestamp, namespace, pod_name, features,
-                 raw_message, log_level, error_indicators, message_entropy)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                sample_hash,
-                cluster_id,
-                sample.get("timestamp"),
-                sample.get("namespace"),
-                sample.get("pod_name"),
-                features_blob,
-                sample.get("raw_message", "")[:1000],  # Limit message size
-                sample.get("log_level"),
-                sample.get("error_indicators", 0),
-                sample.get("message_entropy", 0.0)
-            ))
+            try:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO log_samples
+                    (sample_hash, cluster_id, timestamp, namespace, pod_name, features,
+                     raw_message, log_level, error_indicators, message_entropy)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    sample_hash,
+                    cluster_id,
+                    sample.get("timestamp"),
+                    sample.get("namespace"),
+                    sample.get("pod_name"),
+                    features_blob,
+                    sample.get("raw_message", "")[:1000],  # Limit message size
+                    sample.get("log_level"),
+                    sample.get("error_indicators", 0),
+                    sample.get("message_entropy", 0.0)
+                ))
 
-            conn.commit()
-            return cursor.lastrowid if cursor.rowcount > 0 else None
-        except sqlite3.Error as e:
-            logger.warning(f"Failed to store log sample: {e}")
-            return None
-        finally:
-            conn.close()
+                conn.commit()
+                return cursor.lastrowid if cursor.rowcount > 0 else None
+            except sqlite3.Error as e:
+                logger.warning(f"Failed to store log sample: {e}")
+                return None
 
     def store_failure_label(self, label: Dict[str, Any], cluster_id: Optional[str] = None) -> Optional[int]:
         """Store a failure label.
@@ -823,36 +830,34 @@ class TrainingDataStore:
         if "metadata" in label and label["metadata"]:
             metadata_str = json.dumps(label["metadata"])
 
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
 
-        try:
-            cursor.execute("""
-                INSERT OR IGNORE INTO failure_labels
-                (failure_id, cluster_id, failure_type, severity, namespace, resource_name,
-                 resource_type, failure_time, detection_source, error_category, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                failure_id,
-                cluster_id,
-                label.get("failure_type"),
-                label.get("severity"),
-                label.get("namespace"),
-                label.get("resource_name"),
-                label.get("resource_type"),
-                label.get("failure_time"),
-                label.get("detection_source"),
-                label.get("error_category"),
-                metadata_str
-            ))
+            try:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO failure_labels
+                    (failure_id, cluster_id, failure_type, severity, namespace, resource_name,
+                     resource_type, failure_time, detection_source, error_category, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    failure_id,
+                    cluster_id,
+                    label.get("failure_type"),
+                    label.get("severity"),
+                    label.get("namespace"),
+                    label.get("resource_name"),
+                    label.get("resource_type"),
+                    label.get("failure_time"),
+                    label.get("detection_source"),
+                    label.get("error_category"),
+                    metadata_str
+                ))
 
-            conn.commit()
-            return cursor.lastrowid if cursor.rowcount > 0 else None
-        except sqlite3.Error as e:
-            logger.warning(f"Failed to store failure label: {e}")
-            return None
-        finally:
-            conn.close()
+                conn.commit()
+                return cursor.lastrowid if cursor.rowcount > 0 else None
+            except sqlite3.Error as e:
+                logger.warning(f"Failed to store failure label: {e}")
+                return None
 
     def store_correlation(
         self,
@@ -862,23 +867,21 @@ class TrainingDataStore:
         time_delta_seconds: int
     ) -> Optional[int]:
         """Store a log-failure correlation."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
 
-        try:
-            cursor.execute("""
-                INSERT OR IGNORE INTO log_failure_correlations
-                (log_sample_id, failure_label_id, correlation_score, time_delta_seconds)
-                VALUES (?, ?, ?, ?)
-            """, (log_sample_id, failure_label_id, correlation_score, time_delta_seconds))
+            try:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO log_failure_correlations
+                    (log_sample_id, failure_label_id, correlation_score, time_delta_seconds)
+                    VALUES (?, ?, ?, ?)
+                """, (log_sample_id, failure_label_id, correlation_score, time_delta_seconds))
 
-            conn.commit()
-            return cursor.lastrowid if cursor.rowcount > 0 else None
-        except sqlite3.Error as e:
-            logger.warning(f"Failed to store correlation: {e}")
-            return None
-        finally:
-            conn.close()
+                conn.commit()
+                return cursor.lastrowid if cursor.rowcount > 0 else None
+            except sqlite3.Error as e:
+                logger.warning(f"Failed to store correlation: {e}")
+                return None
 
     def get_failure_labels_in_window(
         self,
@@ -902,67 +905,66 @@ class TrainingDataStore:
         Returns:
             List of failure label dicts
         """
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
 
-        query = """
-            SELECT id, failure_id, cluster_id, failure_type, severity, namespace, resource_name,
-                   resource_type, failure_time, detection_source, error_category, metadata
-            FROM failure_labels
-            WHERE failure_time >= ? AND failure_time <= ?
-        """
-        params = [start_time.isoformat(), end_time.isoformat()]
+            query = """
+                SELECT id, failure_id, cluster_id, failure_type, severity, namespace, resource_name,
+                       resource_type, failure_time, detection_source, error_category, metadata
+                FROM failure_labels
+                WHERE failure_time >= ? AND failure_time <= ?
+            """
+            params = [start_time.isoformat(), end_time.isoformat()]
 
-        # Filter by cluster
-        if cluster_id:
-            query += " AND cluster_id = ?"
-            params.append(cluster_id)
-        elif current_cluster_only:
-            current = get_current_cluster_id()
-            # Include both current cluster and legacy data without cluster_id
-            query += " AND (cluster_id = ? OR cluster_id IS NULL)"
-            params.append(current)
+            # Filter by cluster
+            if cluster_id:
+                query += " AND cluster_id = ?"
+                params.append(cluster_id)
+            elif current_cluster_only:
+                current = get_current_cluster_id()
+                # Include both current cluster and legacy data without cluster_id
+                query += " AND (cluster_id = ? OR cluster_id IS NULL)"
+                params.append(current)
 
-        if failure_types:
-            placeholders = ",".join("?" * len(failure_types))
-            query += f" AND failure_type IN ({placeholders})"
-            params.extend(failure_types)
+            if failure_types:
+                placeholders = ",".join("?" * len(failure_types))
+                query += f" AND failure_type IN ({placeholders})"
+                params.extend(failure_types)
 
-        if namespace:
-            query += " AND namespace = ?"
-            params.append(namespace)
+            if namespace:
+                query += " AND namespace = ?"
+                params.append(namespace)
 
-        query += " ORDER BY failure_time DESC"
+            query += " ORDER BY failure_time DESC"
 
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
 
-        labels = []
-        for row in rows:
-            metadata = None
-            if row[11]:
-                try:
-                    metadata = json.loads(row[11])
-                except json.JSONDecodeError:
-                    metadata = {}
+            labels = []
+            for row in rows:
+                metadata = None
+                if row[11]:
+                    try:
+                        metadata = json.loads(row[11])
+                    except json.JSONDecodeError:
+                        metadata = {}
 
-            labels.append({
-                "id": row[0],
-                "failure_id": row[1],
-                "cluster_id": row[2],
-                "failure_type": row[3],
-                "severity": row[4],
-                "namespace": row[5],
-                "resource_name": row[6],
-                "resource_type": row[7],
-                "failure_time": row[8],
-                "detection_source": row[9],
-                "error_category": row[10],
-                "metadata": metadata
-            })
+                labels.append({
+                    "id": row[0],
+                    "failure_id": row[1],
+                    "cluster_id": row[2],
+                    "failure_type": row[3],
+                    "severity": row[4],
+                    "namespace": row[5],
+                    "resource_name": row[6],
+                    "resource_type": row[7],
+                    "failure_time": row[8],
+                    "detection_source": row[9],
+                    "error_category": row[10],
+                    "metadata": metadata
+                })
 
-        return labels
+            return labels
 
     def get_training_data(
         self,
@@ -980,60 +982,58 @@ class TrainingDataStore:
         Returns:
             Tuple of (samples list, total count)
         """
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
 
-        query = "SELECT * FROM log_samples WHERE 1=1"
-        params = []
+            query = "SELECT * FROM log_samples WHERE 1=1"
+            params = []
 
-        if since:
-            query += " AND created_at >= ?"
-            params.append(since.isoformat())
+            if since:
+                query += " AND created_at >= ?"
+                params.append(since.isoformat())
 
-        if namespace:
-            query += " AND namespace = ?"
-            params.append(namespace)
+            if namespace:
+                query += " AND namespace = ?"
+                params.append(namespace)
 
-        query += " ORDER BY created_at DESC"
+            query += " ORDER BY created_at DESC"
 
-        if limit:
-            query += f" LIMIT {limit}"
+            if limit:
+                query += f" LIMIT {limit}"
 
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
 
-        # Get total count
-        count_query = "SELECT COUNT(*) FROM log_samples WHERE 1=1"
-        count_params = []
-        if since:
-            count_query += " AND created_at >= ?"
-            count_params.append(since.isoformat())
-        if namespace:
-            count_query += " AND namespace = ?"
-            count_params.append(namespace)
+            # Get total count
+            count_query = "SELECT COUNT(*) FROM log_samples WHERE 1=1"
+            count_params = []
+            if since:
+                count_query += " AND created_at >= ?"
+                count_params.append(since.isoformat())
+            if namespace:
+                count_query += " AND namespace = ?"
+                count_params.append(namespace)
 
-        cursor.execute(count_query, count_params)
-        total_count = cursor.fetchone()[0]
+            cursor.execute(count_query, count_params)
+            total_count = cursor.fetchone()[0]
 
-        conn.close()
+            samples = []
+            for row in rows:
+                samples.append({
+                    "id": row[0],
+                    "sample_hash": row[1],
+                    "timestamp": row[2],
+                    "namespace": row[3],
+                    "pod_name": row[4],
+                    "features": row[5],
+                    "raw_message": row[6],
+                    "log_level": row[7],
+                    "error_indicators": row[8],
+                    "message_entropy": row[9],
+                    "created_at": row[10]
+                })
 
-        samples = []
-        for row in rows:
-            samples.append({
-                "id": row[0],
-                "sample_hash": row[1],
-                "timestamp": row[2],
-                "namespace": row[3],
-                "pod_name": row[4],
-                "features": row[5],
-                "raw_message": row[6],
-                "log_level": row[7],
-                "error_indicators": row[8],
-                "message_entropy": row[9],
-                "created_at": row[10]
-            })
-
-        return samples, total_count
+            return samples, total_count
 
     def get_statistics(self, current_cluster_only: bool = False) -> Dict[str, Any]:
         """Get statistics about stored training data.
@@ -1044,62 +1044,61 @@ class TrainingDataStore:
         Returns:
             Dict with statistics
         """
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
 
-        stats = {}
-        current_cluster = get_current_cluster_id()
-        stats["current_cluster"] = current_cluster
+            stats = {}
+            current_cluster = get_current_cluster_id()
+            stats["current_cluster"] = current_cluster
 
-        # Build cluster filter (parameterized to prevent SQL injection)
-        if current_cluster_only and current_cluster:
-            cluster_where = " WHERE (cluster_id = ? OR cluster_id IS NULL)"
-            cluster_and = " AND (cluster_id = ? OR cluster_id IS NULL)"
-            cluster_params = [current_cluster]
-        else:
-            cluster_where = ""
-            cluster_and = ""
-            cluster_params = []
+            # Build cluster filter (parameterized to prevent SQL injection)
+            if current_cluster_only and current_cluster:
+                cluster_where = " WHERE (cluster_id = ? OR cluster_id IS NULL)"
+                cluster_and = " AND (cluster_id = ? OR cluster_id IS NULL)"
+                cluster_params = [current_cluster]
+            else:
+                cluster_where = ""
+                cluster_and = ""
+                cluster_params = []
 
-        # Log samples stats
-        cursor.execute(f"SELECT COUNT(*) FROM log_samples{cluster_where}", cluster_params)
-        stats["total_log_samples"] = cursor.fetchone()[0]
+            # Log samples stats
+            cursor.execute(f"SELECT COUNT(*) FROM log_samples{cluster_where}", cluster_params)
+            stats["total_log_samples"] = cursor.fetchone()[0]
 
-        cursor.execute(f"SELECT COUNT(DISTINCT namespace) FROM log_samples{cluster_where}", cluster_params)
-        stats["unique_namespaces"] = cursor.fetchone()[0]
+            cursor.execute(f"SELECT COUNT(DISTINCT namespace) FROM log_samples{cluster_where}", cluster_params)
+            stats["unique_namespaces"] = cursor.fetchone()[0]
 
-        # Cluster distribution for log samples
-        cursor.execute("SELECT cluster_id, COUNT(*) FROM log_samples GROUP BY cluster_id")
-        stats["log_samples_by_cluster"] = {(k or "legacy"): v for k, v in cursor.fetchall()}
+            # Cluster distribution for log samples
+            cursor.execute("SELECT cluster_id, COUNT(*) FROM log_samples GROUP BY cluster_id")
+            stats["log_samples_by_cluster"] = {(k or "legacy"): v for k, v in cursor.fetchall()}
 
-        # Failure labels stats
-        cursor.execute(f"SELECT COUNT(*) FROM failure_labels{cluster_where}", cluster_params)
-        stats["total_failure_labels"] = cursor.fetchone()[0]
+            # Failure labels stats
+            cursor.execute(f"SELECT COUNT(*) FROM failure_labels{cluster_where}", cluster_params)
+            stats["total_failure_labels"] = cursor.fetchone()[0]
 
-        cursor.execute(f"SELECT failure_type, COUNT(*) FROM failure_labels{' WHERE 1=1' + cluster_and if cluster_and else ''} GROUP BY failure_type", cluster_params)
-        stats["failure_types"] = dict(cursor.fetchall())
+            cursor.execute(f"SELECT failure_type, COUNT(*) FROM failure_labels{' WHERE 1=1' + cluster_and if cluster_and else ''} GROUP BY failure_type", cluster_params)
+            stats["failure_types"] = dict(cursor.fetchall())
 
-        cursor.execute(f"SELECT severity, COUNT(*) FROM failure_labels{' WHERE 1=1' + cluster_and if cluster_and else ''} GROUP BY severity", cluster_params)
-        stats["severity_distribution"] = dict(cursor.fetchall())
+            cursor.execute(f"SELECT severity, COUNT(*) FROM failure_labels{' WHERE 1=1' + cluster_and if cluster_and else ''} GROUP BY severity", cluster_params)
+            stats["severity_distribution"] = dict(cursor.fetchall())
 
-        # Cluster distribution for failure labels
-        cursor.execute("SELECT cluster_id, COUNT(*) FROM failure_labels GROUP BY cluster_id")
-        stats["failure_labels_by_cluster"] = {(k or "legacy"): v for k, v in cursor.fetchall()}
+            # Cluster distribution for failure labels
+            cursor.execute("SELECT cluster_id, COUNT(*) FROM failure_labels GROUP BY cluster_id")
+            stats["failure_labels_by_cluster"] = {(k or "legacy"): v for k, v in cursor.fetchall()}
 
-        # Correlations
-        cursor.execute(f"SELECT COUNT(*) FROM log_failure_correlations")
-        stats["total_correlations"] = cursor.fetchone()[0]
+            # Correlations
+            cursor.execute(f"SELECT COUNT(*) FROM log_failure_correlations")
+            stats["total_correlations"] = cursor.fetchone()[0]
 
-        # Training runs
-        cursor.execute("SELECT COUNT(*) FROM training_runs")
-        stats["total_training_runs"] = cursor.fetchone()[0]
+            # Training runs
+            cursor.execute("SELECT COUNT(*) FROM training_runs")
+            stats["total_training_runs"] = cursor.fetchone()[0]
 
-        cursor.execute("SELECT MAX(training_completed) FROM training_runs WHERE status = 'completed'")
-        result = cursor.fetchone()
-        stats["last_training"] = result[0] if result else None
+            cursor.execute("SELECT MAX(training_completed) FROM training_runs WHERE status = 'completed'")
+            result = cursor.fetchone()
+            stats["last_training"] = result[0] if result else None
 
-        conn.close()
-        return stats
+            return stats
 
     def record_training_run(
         self,
@@ -1111,30 +1110,27 @@ class TrainingDataStore:
         status: str = "completed"
     ) -> int:
         """Record a training run in history."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            INSERT INTO training_runs
-            (model_id, training_started, training_completed, samples_used,
-             labels_used, performance_metrics, trigger_reason, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            model_id,
-            datetime.now().isoformat(),
-            datetime.now().isoformat(),
-            samples_used,
-            labels_used,
-            json.dumps(performance_metrics),
-            trigger_reason,
-            status
-        ))
+            cursor.execute("""
+                INSERT INTO training_runs
+                (model_id, training_started, training_completed, samples_used,
+                 labels_used, performance_metrics, trigger_reason, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                model_id,
+                datetime.now().isoformat(),
+                datetime.now().isoformat(),
+                samples_used,
+                labels_used,
+                json.dumps(performance_metrics),
+                trigger_reason,
+                status
+            ))
 
-        conn.commit()
-        run_id = cursor.lastrowid
-        conn.close()
-
-        return run_id
+            conn.commit()
+            return cursor.lastrowid
 
     def cleanup_old_data(self, max_age_days: int = 90) -> int:
         """Remove old training data.
@@ -1147,30 +1143,29 @@ class TrainingDataStore:
         """
         cutoff = (datetime.now() - timedelta(days=max_age_days)).isoformat()
 
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
 
-        deleted = 0
+            deleted = 0
 
-        # Delete old correlations first (foreign key constraint)
-        cursor.execute("""
-            DELETE FROM log_failure_correlations
-            WHERE log_sample_id IN (
-                SELECT id FROM log_samples WHERE created_at < ?
-            )
-        """, (cutoff,))
-        deleted += cursor.rowcount
+            # Delete old correlations first (foreign key constraint)
+            cursor.execute("""
+                DELETE FROM log_failure_correlations
+                WHERE log_sample_id IN (
+                    SELECT id FROM log_samples WHERE created_at < ?
+                )
+            """, (cutoff,))
+            deleted += cursor.rowcount
 
-        # Delete old log samples
-        cursor.execute("DELETE FROM log_samples WHERE created_at < ?", (cutoff,))
-        deleted += cursor.rowcount
+            # Delete old log samples
+            cursor.execute("DELETE FROM log_samples WHERE created_at < ?", (cutoff,))
+            deleted += cursor.rowcount
 
-        # Delete old failure labels
-        cursor.execute("DELETE FROM failure_labels WHERE created_at < ?", (cutoff,))
-        deleted += cursor.rowcount
+            # Delete old failure labels
+            cursor.execute("DELETE FROM failure_labels WHERE created_at < ?", (cutoff,))
+            deleted += cursor.rowcount
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
         if deleted > 0:
             logger.info(f"Cleaned up {deleted} old training data records")
