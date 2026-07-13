@@ -60,8 +60,8 @@ def get_current_cluster_id() -> str:
         api_server = os.environ.get('KUBERNETES_SERVICE_HOST', '')
         if api_server:
             return f"in-cluster-{api_server}"
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not get cluster ID from in-cluster config: {e}")
 
     return "unknown"
 
