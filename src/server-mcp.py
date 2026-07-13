@@ -1096,7 +1096,7 @@ async def list_pods_in_namespace(namespace: str) -> List[Dict[str, Any]]:
 
 
 @mcp.tool()
-def get_kubernetes_resource(
+async def get_kubernetes_resource(
     resource_type: str,
     name: str,
     namespace: str = "default",
@@ -1215,37 +1215,52 @@ def get_kubernetes_resource(
             if resource_type in ['namespace', 'node', 'persistentvolume', 'pv']:
                 # Cluster-scoped resources
                 method = getattr(k8s_core_api, f'read_{method_name[:-1]}')
-                resource_obj = method(name=name)
+                resource_obj = await asyncio.to_thread(method, name=name)
             elif resource_type == 'endpoints':
                 # Endpoints uses plural form in method name
-                resource_obj = k8s_core_api.read_namespaced_endpoints(name=name, namespace=namespace)
+                resource_obj = await asyncio.to_thread(
+                    k8s_core_api.read_namespaced_endpoints,
+                    name=name, namespace=namespace
+                )
             else:
                 # Namespaced resources
                 method = getattr(k8s_core_api, f'read_namespaced_{method_name[:-1]}')
-                resource_obj = method(name=name, namespace=namespace)
+                resource_obj = await asyncio.to_thread(
+                    method, name=name, namespace=namespace
+                )
 
         elif resource_type in storage_resources:
             # Cluster-scoped storage resources
-            resource_obj = k8s_storage_api.read_storage_class(name=name)
+            method_name, api_version = storage_resources[resource_type]
+            resource_obj = await asyncio.to_thread(
+                k8s_storage_api.read_storage_class, name=name
+            )
 
         elif resource_type in autoscaling_resources:
             method_name, api_version = autoscaling_resources[resource_type]
             method = getattr(k8s_autoscaling_api, f'read_namespaced_{method_name[:-1]}')
-            resource_obj = method(name=name, namespace=namespace)
+            resource_obj = await asyncio.to_thread(
+                method, name=name, namespace=namespace
+            )
 
         elif resource_type in apps_resources:
             method_name, api_version = apps_resources[resource_type]
             method = getattr(k8s_apps_api, f'read_namespaced_{method_name[:-1]}')
-            resource_obj = method(name=name, namespace=namespace)
+            resource_obj = await asyncio.to_thread(
+                method, name=name, namespace=namespace
+            )
 
         elif resource_type in batch_resources:
-            method_name, _ = batch_resources[resource_type]
+            method_name, api_version = batch_resources[resource_type]
             method = getattr(k8s_batch_api, f'read_namespaced_{method_name[:-1]}')
-            resource_obj = method(name=name, namespace=namespace)
+            resource_obj = await asyncio.to_thread(
+                method, name=name, namespace=namespace
+            )
 
         elif resource_type in networking_resources:
             method_name, api_version = networking_resources[resource_type]
-            resource_obj = k8s_custom_api.get_namespaced_custom_object(
+            resource_obj = await asyncio.to_thread(
+                k8s_custom_api.get_namespaced_custom_object,
                 group="networking.k8s.io",
                 version="v1",
                 namespace=namespace,
@@ -1256,7 +1271,8 @@ def get_kubernetes_resource(
         elif resource_type in monitoring_resources:
             method_name, api_version = monitoring_resources[resource_type]
             group, version = api_version.split('/')
-            resource_obj = k8s_custom_api.get_namespaced_custom_object(
+            resource_obj = await asyncio.to_thread(
+                k8s_custom_api.get_namespaced_custom_object,
                 group=group,
                 version=version,
                 namespace=namespace,
@@ -1267,7 +1283,8 @@ def get_kubernetes_resource(
         elif resource_type in admission_resources:
             method_name, api_version = admission_resources[resource_type]
             group, version = api_version.split('/')
-            resource_obj = k8s_custom_api.get_cluster_custom_object(
+            resource_obj = await asyncio.to_thread(
+                k8s_custom_api.get_cluster_custom_object,
                 group=group,
                 version=version,
                 plural=method_name,
@@ -1280,7 +1297,8 @@ def get_kubernetes_resource(
 
             if resource_type == 'clustertask':
                 # Cluster-scoped Tekton resource
-                resource_obj = k8s_custom_api.get_cluster_custom_object(
+                resource_obj = await asyncio.to_thread(
+                    k8s_custom_api.get_cluster_custom_object,
                     group=group,
                     version=version,
                     plural=method_name,
@@ -1288,7 +1306,8 @@ def get_kubernetes_resource(
                 )
             else:
                 # Namespaced Tekton resource
-                resource_obj = k8s_custom_api.get_namespaced_custom_object(
+                resource_obj = await asyncio.to_thread(
+                    k8s_custom_api.get_namespaced_custom_object,
                     group=group,
                     version=version,
                     namespace=namespace,
@@ -1299,7 +1318,8 @@ def get_kubernetes_resource(
         elif resource_type in tekton_triggers_resources:
             method_name, api_version = tekton_triggers_resources[resource_type]
             group, version = api_version.split('/')
-            resource_obj = k8s_custom_api.get_namespaced_custom_object(
+            resource_obj = await asyncio.to_thread(
+                k8s_custom_api.get_namespaced_custom_object,
                 group=group,
                 version=version,
                 namespace=namespace,
@@ -1310,7 +1330,8 @@ def get_kubernetes_resource(
         elif resource_type in konflux_resources:
             method_name, api_version = konflux_resources[resource_type]
             group, version = api_version.split('/')
-            resource_obj = k8s_custom_api.get_namespaced_custom_object(
+            resource_obj = await asyncio.to_thread(
+                k8s_custom_api.get_namespaced_custom_object,
                 group=group,
                 version=version,
                 namespace=namespace,
