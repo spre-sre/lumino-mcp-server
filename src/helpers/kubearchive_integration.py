@@ -569,8 +569,14 @@ class KubeArchiveEndpointDiscovery:
             logger.error(f"Error setting up port-forward: {e}")
             return None
 
-    def stop_port_forward(self) -> None:
-        """Stop the port-forward process if running."""
+    def stop_port_forward(self, _from_signal_handler: bool = False) -> None:
+        """
+        Stop the port-forward process if running.
+
+        Args:
+            _from_signal_handler: Internal flag indicating call from signal handler.
+                When True, skips signal handler restoration to prevent dual execution.
+        """
         if self._port_forward_process:
             try:
                 logger.info("Stopping port-forward...")
@@ -587,7 +593,7 @@ class KubeArchiveEndpointDiscovery:
                 self._port_forward_process = None
                 self._port_forward_port = None
 
-        self._unregister_cleanup_handlers()
+        self._unregister_cleanup_handlers(restore_signal_handlers=not _from_signal_handler)
 
     def _register_cleanup_handlers(self) -> None:
         """Register atexit and signal handlers for cleanup."""
@@ -598,13 +604,24 @@ class KubeArchiveEndpointDiscovery:
         if not self._signal_handlers_registered:
             try:
                 self._original_sigterm_handler = signal.signal(signal.SIGTERM, self._signal_handler)
-                self._original_sigint_handler = signal.signal(signal.SIGINT, self._signal_handler)
-                self._signal_handlers_registered = True
+                try:
+                    self._original_sigint_handler = signal.signal(signal.SIGINT, self._signal_handler)
+                    self._signal_handlers_registered = True
+                except (ValueError, OSError) as e:
+                    # Rollback SIGTERM handler if SIGINT registration failed
+                    signal.signal(signal.SIGTERM, self._original_sigterm_handler)
+                    logger.debug(f"Could not register SIGINT handler (rolling back SIGTERM): {e}")
             except (ValueError, OSError) as e:
                 logger.debug(f"Could not register signal handlers: {e}")
 
-    def _unregister_cleanup_handlers(self) -> None:
-        """Unregister atexit and signal handlers."""
+    def _unregister_cleanup_handlers(self, restore_signal_handlers: bool = True) -> None:
+        """
+        Unregister atexit and signal handlers.
+
+        Args:
+            restore_signal_handlers: If True, restore original signal handlers.
+                Set to False when called from signal handler to prevent dual execution.
+        """
         if self._atexit_registered:
             try:
                 atexit.unregister(self.stop_port_forward)
@@ -612,7 +629,7 @@ class KubeArchiveEndpointDiscovery:
             except Exception as e:
                 logger.debug(f"Error unregistering atexit handler: {e}")
 
-        if self._signal_handlers_registered:
+        if self._signal_handlers_registered and restore_signal_handlers:
             try:
                 if self._original_sigterm_handler is not None:
                     signal.signal(signal.SIGTERM, self._original_sigterm_handler)
@@ -621,20 +638,43 @@ class KubeArchiveEndpointDiscovery:
                 self._signal_handlers_registered = False
             except (ValueError, OSError) as e:
                 logger.debug(f"Error restoring signal handlers: {e}")
-
+        elif not restore_signal_handlers:
+            # Mark handlers as unregistered without restoring them
+            # (signal handler will restore them itself)
+            self._signal_handlers_registered = False
     def _signal_handler(self, signum: int, frame) -> None:
-        """Handle signals by cleaning up port-forward and calling original handler."""
-        logger.debug(f"Received signal {signum}, cleaning up port-forward")
-        self.stop_port_forward()
+        """
+        Handle signals by cleaning up port-forward and calling original handler.
 
-        # Call the original handler if it exists
+        Properly distinguishes between:
+        - signal.SIG_DFL (0, falsy but valid): restore default and re-raise signal
+        - signal.SIG_IGN (1): ignore signal after cleanup
+        - callable handler: chain to original handler
+
+        IMPORTANT: Calls stop_port_forward with _from_signal_handler=True to prevent
+        dual handler execution (restore + explicit call).
+        """
+        logger.debug(f"Received signal {signum}, cleaning up port-forward")
+        self.stop_port_forward(_from_signal_handler=True)
+
+        # Determine the original handler based on signal type
         original_handler = None
         if signum == signal.SIGTERM:
             original_handler = self._original_sigterm_handler
         elif signum == signal.SIGINT:
             original_handler = self._original_sigint_handler
 
-        if original_handler and callable(original_handler):
+        # Handle different original handler types
+        # CRITICAL: signal.SIG_DFL is 0 (falsy), so we must use identity check
+        if original_handler is signal.SIG_DFL:
+            # Restore default handler and re-raise signal to terminate process
+            signal.signal(signum, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+        elif original_handler is signal.SIG_IGN:
+            # Original handler was SIG_IGN, do nothing after cleanup
+            pass
+        elif callable(original_handler):
+            # Chain to original callable handler
             original_handler(signum, frame)
 
     def __enter__(self):
