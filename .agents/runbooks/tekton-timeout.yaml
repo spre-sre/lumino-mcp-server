@@ -1,0 +1,66 @@
+apiVersion: spre.agents/v1
+kind: Runbook
+metadata:
+  name: tekton-timeout
+  description: "Pipeline or task execution killed because it exceeded the configured timeout"
+spec:
+  trigger:
+    patterns:
+      - "PipelineRunTimeout"
+      - "TaskRunTimeout"
+      - "TaskRunCancelled"
+      - "PipelineRun.*failed to finish within"
+      - "TaskRun.*failed to finish within"
+      - "context deadline exceeded"
+      - "timed out"
+  diagnostic_steps:
+    - tool: lumino.list_pipelineruns
+      args:
+        namespace: "{{ namespace }}"
+        limit: 20
+      extract: ["name", "status", "duration", "started_at", "completed_at"]
+    - tool: lumino.list_taskruns
+      args:
+        namespace: "{{ namespace }}"
+        pipeline_run: "{{ pipeline_run }}"
+      extract: ["name", "task", "status", "duration", "started_at", "completed_at"]
+    - tool: lumino.get_pipelinerun_logs
+      args:
+        pipelinerun_name: "{{ pipeline_run }}"
+        namespace: "{{ namespace }}"
+        tail_lines: 200
+      extract: ["logs"]
+      fallback:
+        condition: "No pods found (pods garbage-collected after timeout)"
+        tool: lumino.query_kubearchive
+        args:
+          resource_type: "pipelinerun"
+          namespace: "{{ namespace }}"
+          name: "{{ pipeline_run }}"
+          include_logs: true
+        note: "query_kubearchive requires KubeArchive to be deployed in the cluster.
+          If unavailable, logs are unrecoverable — increase pod GC retention
+          (tekton-pipelines-controller pruner settings) to capture future timeouts."
+  analysis:
+    compare:
+      - "Individual TaskRun durations vs PipelineRun-level timeout (spec.timeouts.pipeline)"
+      - "TaskRun durations vs each other to identify the slowest task"
+      - "Timeout type: PipelineRunTimeout (total budget) vs TaskRunTimeout (per-task limit)"
+    check:
+      - "Which TaskRun has the longest duration and is it the one that timed out?"
+      - "Was the timeout hit at the PipelineRun level or a specific TaskRun level? Note: when a PipelineRun timeout fires, in-flight TaskRuns are cancelled with TaskRunCancelled — TaskRunTimeout only appears when a per-task timeout (spec.timeouts.tasks) is breached independently."
+      - "Is the timeout breach consistent across multiple runs or intermittent?"
+      - "Was the slow task performing a network-bound operation (image pull, artifact download, git clone)?"
+      - "Are there log entries showing what the task was executing immediately before the timeout?"
+      - "Is there evidence of CPU throttling or resource starvation causing the slowdown?"
+  remediation:
+    - "Increase the pipeline-level timeout in the PipelineRun spec (spec.timeouts.pipeline)"
+    - "Set a dedicated per-task timeout (spec.timeouts.tasks) to isolate slow tasks and fail fast"
+    - "Optimize the slowest task: cache dependencies, parallelize steps, or reduce build scope"
+    - "Split long-running tasks into smaller, independently-timed units that can be retried individually"
+    - "Investigate upstream resource bottlenecks causing delays (image registry, artifact repo, external APIs)"
+    - "Add CPU/memory resource requests to the task pod to prevent throttling on overcommitted nodes"
+  verification:
+    - "Rerun the PipelineRun and confirm it completes within the updated timeout window"
+    - "Compare TaskRun durations before and after the fix using list_taskruns with the same pipeline_run filter"
+    - "Monitor for recurrence cluster-wide using get_tekton_pipeline_runs_status"

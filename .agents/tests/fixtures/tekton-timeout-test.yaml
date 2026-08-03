@@ -1,0 +1,60 @@
+# Test fixture for the tekton-timeout runbook (SPRE-5975).
+#
+# Creates a deliberately slow PipelineRun that will always exceed its 60-second
+# timeout, triggering the PipelineRunTimeout / TaskRunTimeout reason codes that
+# the runbook is designed to diagnose.
+#
+# Apply order: Namespace → Task → Pipeline → PipelineRun
+# Watch:       oc get pipelinerun -n spre-timeout-test -w
+# Diagnose:    run the tekton-timeout runbook diagnostic_steps against
+#              namespace=spre-timeout-test and the PipelineRun name below.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spre-timeout-test
+  labels:
+    purpose: spre-runbook-testing
+---
+# OpenShift Pipelines requires a 'pipeline' service account in every namespace
+# that runs PipelineRuns. It is not auto-created for plain namespaces.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pipeline
+  namespace: spre-timeout-test
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: slow-task
+  namespace: spre-timeout-test
+spec:
+  steps:
+    - name: long-running-step
+      # UBI minimal is available on all RHEL-based OCP clusters without
+      # additional registry config.
+      image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      command: ["sleep", "300"]   # 5 min — guaranteed to exceed the 60s timeout
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: slow-pipeline
+  namespace: spre-timeout-test
+spec:
+  tasks:
+    - name: step-one
+      taskRef:
+        name: slow-task
+---
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: timeout-test-run
+  namespace: spre-timeout-test
+spec:
+  pipelineRef:
+    name: slow-pipeline
+  timeouts:
+    pipeline: "60s"   # will be exceeded by the 300s sleep → PipelineRunTimeout
