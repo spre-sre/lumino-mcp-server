@@ -1,0 +1,62 @@
+apiVersion: spre.agents/v1
+kind: Runbook
+metadata:
+  name: certificate-expiry
+  description: "TLS certificate approaching expiry or already expired, risking service disruption"
+spec:
+  trigger:
+    patterns:
+      - "certificate.*expir"
+      - "x509: certificate has expired"
+      - "x509: certificate is not yet valid"
+      - "tls: failed to verify certificate"
+      - "CERTIFICATE_VERIFY_FAILED"
+      - "certificate will expire"
+      - "CertificateExpired"
+      - "CertificateNotYetValid"
+  diagnostic_steps:
+    - tool: lumino.check_cluster_certificate_health
+      args:
+        warning_threshold_days: 30
+        critical_threshold_days: 7
+        include_system_certs: true
+      extract: ["scan_summary", "certificate_details", "expiration_timeline", "renewal_recommendations"]
+    - tool: lumino.check_cluster_certificate_health
+      args:
+        warning_threshold_days: 30
+        critical_threshold_days: 7
+        include_system_certs: true
+        namespaces: ["{{ namespace }}"]
+        certificate_types: ["tls", "ca"]
+      extract: ["certificate_details", "security_findings"]
+    - tool: lumino.investigate_tls_certificate_issues
+      args:
+        time_range: "24h"
+        max_namespaces: 20
+        focus_on_system_namespaces: true
+      extract: ["tls_issues", "affected_pods", "certificate_problems", "remediation_suggestions"]
+  analysis:
+    compare:
+      - "days_remaining per certificate vs warning_threshold_days (30) and critical_threshold_days (7)"
+      - "certificate issuer vs expected CA — detect unexpected self-signed or unknown issuers"
+      - "SAN (Subject Alternative Names) vs hostnames actively serving traffic"
+    check:
+      - "Which certificates are in the critical window (≤7 days remaining)?"
+      - "Which certificates are in the warning window (8–30 days remaining)?"
+      - "Are any certificates already expired (days_remaining ≤ 0)?"
+      - "Is the certificate managed by cert-manager (check for Certificate CR annotations)?"
+      - "Did cert-manager fail to renew — is the CertificateRequest CR in a failed state?"
+      - "Are the affected certificates serving live traffic (ingress, service mesh, webhook)?"
+      - "Is the issuer CA itself expiring, which would cascade across all issued certificates?"
+  remediation:
+    - "For cert-manager managed certs: trigger immediate renewal with 'kubectl annotate certificate <name> cert-manager.io/issuer-kind=Issuer --overwrite' or delete the Secret to force re-issuance"
+    - "For manually managed certs: generate a new certificate from the CA, update the TLS Secret, and restart affected workloads"
+    - "For expiring CA certificates: rotate the CA first, then re-issue all leaf certificates — do not rotate leaf certs before the CA"
+    - "Verify cert-manager ClusterIssuer / Issuer is healthy and ACME solver challenges are completing successfully"
+    - "For webhook serving certs (e.g., admission webhooks): ensure the caBundle in the MutatingWebhookConfiguration or ValidatingWebhookConfiguration is updated after rotation"
+    - "Set up PrometheusRule alerts on 'certmanager_certificate_expiration_timestamp_seconds' to catch future expirations earlier"
+  verification:
+    - "Rerun check_cluster_certificate_health with the same thresholds and confirm affected certificates are no longer in warning or critical state"
+    - "Verify TLS handshakes succeed: 'openssl s_client -connect <host>:<port> -servername <host> </dev/null 2>&1 | grep -E \"Verify|notAfter\"'"
+    - "Confirm no TLS errors in affected pod logs using investigate_tls_certificate_issues with time_range set to post-rotation window"
+    - "For cert-manager: confirm Certificate CR status shows 'Ready=True' and the new expiry is in the expected future window"
