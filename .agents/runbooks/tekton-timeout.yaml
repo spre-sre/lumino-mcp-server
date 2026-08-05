@@ -19,6 +19,13 @@ spec:
         namespace: "{{ namespace }}"
         limit: 20
       extract: ["name", "status", "duration", "started_at", "completed_at"]
+    - tool: lumino.get_kubernetes_resource
+      args:
+        resource_type: "pipelinerun"
+        name: "{{ pipeline_run }}"
+        namespace: "{{ namespace }}"
+        output_format: "detailed"
+      extract: ["spec.timeouts.pipeline", "spec.timeouts.tasks", "spec.timeouts.finally"]
     - tool: lumino.list_taskruns
       args:
         namespace: "{{ namespace }}"
@@ -43,7 +50,7 @@ spec:
           (tekton-pipelines-controller pruner settings) to capture future timeouts."
   analysis:
     compare:
-      - "Individual TaskRun durations vs PipelineRun-level timeout (spec.timeouts.pipeline)"
+      - "Actual TaskRun/PipelineRun durations (from list_taskruns) vs configured timeout values (spec.timeouts.pipeline, spec.timeouts.tasks from get_kubernetes_resource) to compute the breach margin"
       - "TaskRun durations vs each other to identify the slowest task"
       - "Timeout type: PipelineRunTimeout (total budget) vs TaskRunTimeout (per-task limit)"
     check:
