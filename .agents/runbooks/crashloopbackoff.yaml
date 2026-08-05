@@ -41,7 +41,10 @@ spec:
     - tool: lumino.smart_get_namespace_events
       args:
         namespace: "{{ namespace }}"
-        time_period: "1h"
+        # Prefer last_n_events over time_period. Live kind validation (SPRE-5971)
+        # showed time_period="1h" can filter out all recent events (0 of N) while
+        # last_n_events / adaptive mode correctly returns BackOff warnings.
+        last_n_events: 50
         focus_areas: ["errors", "warnings", "failures"]
       extract: ["events", "insights", "recommendations"]
     - tool: lumino.smart_summarize_pod_logs
@@ -51,12 +54,15 @@ spec:
         container_name: "{{ container }}"
         summary_level: "detailed"
         focus_areas: ["errors", "warnings"]
-        time_period: "1h"
-      extract: ["insights", "patterns", "recommendations"]
+        tail_lines: 200
+      extract: ["insights", "patterns", "recommendations", "metadata"]
       # smart_summarize_pod_logs has no `previous` arg (verified in MCP schema /
       # server-mcp.py). Previous-instance logs are available on get_pipelinerun_logs
       # and get_etcd_logs only. If current-container output is empty, rely on
       # get_kubernetes_resource lastState + events, and note the Lumino gap.
+      # Pattern extraction may report 0 matches for plain stderr without
+      # error/warning keywords — still inspect metadata.processing_metrics and
+      # any returned samples / raw lines for messages like "not found".
       on_failure: skip
   analysis:
     compare:
