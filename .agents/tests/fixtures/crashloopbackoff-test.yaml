@@ -1,0 +1,59 @@
+# Test fixture for the crashloopbackoff runbook (SPRE-5971).
+#
+# Creates a Deployment whose container always exits immediately (exit 1),
+# producing a deterministic CrashLoopBackOff under the Deployment default
+# restartPolicy of Always (Kubernetes Pod lifecycle).
+#
+# Cycle timing is dominated by kubelet restart backoff (10s, 20s, 40s, …
+# capped at 300s), not terminationGracePeriodSeconds — do not expect a
+# faster loop from lowering the grace period for an immediate exit 1.
+#
+# Apply:    oc apply -f crashloopbackoff-test.yaml
+# Watch:    oc get pods -n spre-crashloop-test -w
+# Diagnose: run crashloopbackoff diagnostic_steps with
+#           namespace=spre-crashloop-test and the crashing pod name.
+# Cleanup:  oc delete -f crashloopbackoff-test.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spre-crashloop-test
+  labels:
+    purpose: spre-runbook-testing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intentional-crash
+  namespace: spre-crashloop-test
+  labels:
+    app: intentional-crash
+    purpose: spre-runbook-testing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: intentional-crash
+  template:
+    metadata:
+      labels:
+        app: intentional-crash
+    spec:
+      containers:
+        - name: crash
+          # UBI minimal is available on RHEL-based OCP clusters without
+          # additional registry config (same approach as tekton-timeout fixture).
+          image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "intentional crash for crashloopbackoff runbook test" >&2
+              echo "simulating missing config: configmap \"app-config\" not found" >&2
+              exit 1
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi

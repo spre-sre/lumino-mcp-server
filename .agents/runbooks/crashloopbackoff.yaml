@@ -1,0 +1,94 @@
+# CrashLoopBackOff runbook — SPRE-5971
+# Schema: design spec §5.2 (spre.agents/v1 Runbook)
+# Pattern: design spec §3.2 pattern #3
+# Tools verified against lumino-mcp-server MCP signatures
+apiVersion: spre.agents/v1
+kind: Runbook
+metadata:
+  name: crashloopbackoff
+  description: "Container repeatedly crashes on startup and Kubernetes backs off restarting it"
+  failure_type: CrashLoopBackOff
+spec:
+  trigger:
+    # String match against error/status/log text (§3.2: simple string matching).
+    # Do NOT use bare "BackOff" — that also matches ImagePullBackOff (pattern #2).
+    patterns:
+      - "CrashLoopBackOff"
+      - "Back-off restarting failed container"
+      - "Liveness probe failed"
+      - "Startup probe failed"
+    # Waiting-reason / status signals distinct from ImagePullBackOff / ErrImagePull.
+    events:
+      - "CrashLoopBackOff"
+    # Common terminated exit codes for crash loops (exclude 137 — that is oomkilled).
+    # 126/127: shell/Docker convention — command not executable / not found.
+    exit_codes: [1, 126, 127, 139]
+  diagnostic_steps:
+    # §3.2 prescribed tools: list_pods_in_namespace, smart_summarize_pod_logs.
+    # get_kubernetes_resource + smart_get_namespace_events added from SOP practice
+    # (oc describe / events) with params verified against Lumino MCP schemas.
+    - tool: lumino.list_pods_in_namespace
+      args:
+        namespace: "{{ namespace }}"
+      extract: ["name", "status", "restart_count", "container_states", "node_name", "creation_timestamp"]
+    - tool: lumino.get_kubernetes_resource
+      args:
+        resource_type: "pod"
+        name: "{{ pod }}"
+        namespace: "{{ namespace }}"
+        output_format: "detailed"
+      extract: ["status", "lastState", "exitCode", "reason", "message", "volumeMounts", "env"]
+    - tool: lumino.smart_get_namespace_events
+      args:
+        namespace: "{{ namespace }}"
+        time_period: "1h"
+        focus_areas: ["errors", "warnings", "failures"]
+      extract: ["events", "insights", "recommendations"]
+    - tool: lumino.smart_summarize_pod_logs
+      args:
+        namespace: "{{ namespace }}"
+        pod_name: "{{ pod }}"
+        container_name: "{{ container }}"
+        summary_level: "detailed"
+        focus_areas: ["errors", "warnings"]
+        time_period: "1h"
+      extract: ["insights", "patterns", "recommendations"]
+      # smart_summarize_pod_logs has no `previous` arg (verified in MCP schema /
+      # server-mcp.py). Previous-instance logs are available on get_pipelinerun_logs
+      # and get_etcd_logs only. If current-container output is empty, rely on
+      # get_kubernetes_resource lastState + events, and note the Lumino gap.
+      on_failure: skip
+  analysis:
+    compare:
+      - "restart_count vs peer pods in the same Deployment/StatefulSet"
+      - "lastState.terminated.exitCode vs known meanings (1=app error, 126=command found but not executable, 127=command not found, 137=OOM → hand off to oomkilled runbook, 139=segfault)"
+      - "container waiting reason CrashLoopBackOff vs ImagePullBackOff / ErrImagePull (different runbook)"
+    check:
+      - "Which pods are in CrashLoopBackOff and what are their restart counts?"
+      - "What exit code and termination reason appear in lastState.terminated?"
+      - "Are current-container logs empty because the process just restarted or is in backoff wait? If so, lastState + events are the primary signal until previous-instance log support exists on smart_summarize_pod_logs."
+      - "Do logs show missing ConfigMap/Secret, bad args, panic, auth failure, or dependency unreachable?"
+      - "Are required volumes/env refs present (configMapRef / secretRef) on the pod spec?"
+      - "Did CrashLoopBackOff start after a recent deploy, ConfigMap, or Secret change (correlate with events)?"
+      - "Is this OOM (exit 137 / reason OOMKilled) rather than a true startup crash — if so, switch to the oomkilled runbook?"
+      - "Are liveness or startup probe failures killing the container? (Readiness probe failures remove endpoints only and do not restart containers.)"
+  remediation:
+    - "Fix the application startup error identified in logs (bad config, missing dependency, panic)"
+    - "Restore or create missing ConfigMaps/Secrets referenced by the workload; verify ArgoCD/GitOps sync if managed"
+    - "Roll back a bad deployment or config change that introduced the crash loop"
+    - "Correct command/args or image so the process can start (exit 126 not-executable / 127 not-found)"
+    - "If exit code 137 or reason OOMKilled, follow the oomkilled runbook instead of CrashLoop-only fixes"
+    - "Adjust misconfigured liveness or startup probes that kill a still-starting container"
+  verification:
+    - "Rerun list_pods_in_namespace and confirm no pods remain in CrashLoopBackOff"
+    - "Confirm restart_count stabilizes (no further increments over several minutes)"
+    - "Rerun smart_summarize_pod_logs and confirm prior fatal/error patterns are gone"
+    - "Confirm related Warning events for Back-off restarting / CrashLoopBackOff stop appearing in smart_get_namespace_events"
+  rollback:
+    - "If a config or image change was applied during remediation and the crash worsens, roll back the Deployment/StatefulSet to the last known-good revision"
+    - "Restore previous ConfigMap/Secret versions from GitOps if the change was synced via ArgoCD"
+  escalation:
+    # Generic CrashLoop SOP: escalate by namespace ownership when unresolved.
+    # Service-specific SOPs (e.g. TektonKueue) may name a fixed Slack channel.
+    condition: "CrashLoopBackOff persists after diagnostic steps with no clear root cause, or the fix requires application/code changes outside SRE control"
+    target: "Owning application team for the alert namespace (see Application Team Contact List); for shared infra namespaces escalate to the relevant platform/infra forum"
