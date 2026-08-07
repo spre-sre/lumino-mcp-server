@@ -9,7 +9,7 @@ Step-by-step setup of the MCP diagnostics stack used by the SPRE SRE team, plus 
 | Server | Canonical setup source |
 |--------|------------------------|
 | Lumino | [spre-sre/lumino-mcp-server](https://github.com/spre-sre/lumino-mcp-server) (this repo) |
-| PagerDuty | [ggeorgie/pager-duty-mcp](https://gitlab.cee.redhat.com/ggeorgie/pager-duty-mcp) ([SPRE-5903](https://redhat.atlassian.net/browse/SPRE-5903)) |
+| PagerDuty | [ggeorgie/pager-duty-mcp](https://gitlab.cee.redhat.com/ggeorgie/pager-duty-mcp) |
 | Slack | [Slack MCP setup](https://gitlab.cee.redhat.com/qe-ds/rh-ai-slack-newsletter#slack-mcp-setup-redhat-community-ai-toolsslack-mcp) → [redhat-community-ai-tools/slack-mcp](https://github.com/redhat-community-ai-tools/slack-mcp) |
 | ngit-memory | [ggeorgie/neural-git](https://gitlab.cee.redhat.com/ggeorgie/neural-git) |
 | DevLake | Hosted Konflux DevLake MCP (HTTP); see [DevLake setup](#devlake) |
