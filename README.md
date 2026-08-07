@@ -14,6 +14,7 @@ An open source MCP (Model Context Protocol) server empowering SREs with intellig
 - [Overview](#overview)
 - [Features](#features)
 - [Quick Start](#quick-start)
+- [Team Onboarding Guide](#team-onboarding-guide)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Usage Examples](#usage-examples)
@@ -32,6 +33,12 @@ An open source MCP (Model Context Protocol) server empowering SREs with intellig
 - [Security](#security)
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
+
+## Team Onboarding Guide
+
+New to the SPRE MCP diagnostics stack (Lumino, PagerDuty, Slack, DevLake, ngit-memory)? Start here:
+
+- **[docs/ONBOARDING_GUIDE.md](docs/ONBOARDING_GUIDE.md)** — setup, first diagnostic, troubleshooting, three worked examples, and expected tool outputs
 
 ## Overview
 
