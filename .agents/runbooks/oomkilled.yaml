@@ -1,6 +1,5 @@
 # OOMKilled runbook — SPRE-5972
-# Schema: design spec §5.2 (spre.agents/v1 Runbook)
-# Pattern: design spec §3.2 pattern #1 (canonical example)
+# apiVersion/kind: spre.agents/v1 Runbook (schema to be formalized later)
 # Tools verified against lumino-mcp-server MCP signatures
 # Live-validated on kind-konflux (SPRE-5972): fixture reaches exit 137 / OOMKilled;
 # check_resource_constraints reports via lastState after restart; prometheus may be
@@ -13,7 +12,7 @@ metadata:
   failure_type: OOMKilled
 spec:
   trigger:
-    # String match against error/status/log text (§3.2: simple string matching).
+    # String match against error/status/log text.
     patterns:
       - "OOMKilled"
       - "exit code 137"
@@ -26,7 +25,7 @@ spec:
     # SIGKILL from the OOM killer — hand off CrashLoopBackOff (exit != 137) to that runbook.
     exit_codes: [137]
   diagnostic_steps:
-    # §3.2 prescribed tools: check_resource_constraints, prometheus_query (usage + limit).
+    # Prescribed tools: check_resource_constraints, prometheus_query (usage + limit).
     # get_kubernetes_resource added from SOP practice (oc describe) to confirm
     # state/lastState.terminated.reason/exitCode — params verified against Lumino MCP schemas.
     # Live kind test: check_resource_constraints only appends oom_killed_containers from
@@ -42,10 +41,13 @@ spec:
         name: "{{ pod }}"
         namespace: "{{ namespace }}"
         output_format: "detailed"
+      # get_kubernetes_resource returns a plain str (detailed multi-line text with
+      # --- STATUS --- / embedded JSON), not a dict. extract here is semantic guidance
+      # for the agent (read those fields from the text), not programmatic dict-key access.
       extract: ["status", "state", "lastState", "exitCode", "reason", "message", "resources"]
     - tool: lumino.prometheus_query
       args:
-        # Instant working-set bytes for the pod (design §3.2 example query).
+        # Instant working-set bytes for the pod.
         query: "container_memory_working_set_bytes{namespace='{{ namespace }}', pod='{{ pod }}', container!='', container!='POD'}"
         query_type: "instant"
         format: "json"
@@ -54,7 +56,7 @@ spec:
       on_failure: skip
     - tool: lumino.prometheus_query
       args:
-        # Instant memory limit from kube-state-metrics (design §3.2 example query).
+        # Instant memory limit from kube-state-metrics.
         query: "kube_pod_container_resource_limits{namespace='{{ namespace }}', pod='{{ pod }}', resource='memory'}"
         query_type: "instant"
         format: "json"
