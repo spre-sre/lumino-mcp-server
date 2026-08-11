@@ -1,0 +1,64 @@
+# Test fixture for the oomkilled runbook (SPRE-5972).
+#
+# Creates a Deployment whose container exponentially grows an in-memory
+# string until the cgroup OOM killer terminates it (exit 137 / OOMKilled).
+# A tight memory limit (32Mi) keeps the kill deterministic and fast.
+#
+# Apply:    oc apply -f oomkilled-test.yaml
+# Watch:    oc get pods -n spre-oomkilled-test -w
+# Describe: oc describe pod -n spre-oomkilled-test -l app=intentional-oom
+# Diagnose: run oomkilled diagnostic_steps with
+#           namespace=spre-oomkilled-test and the OOM'd pod name.
+# Cleanup:  oc delete -f oomkilled-test.yaml
+#
+# Notes:
+# - Expect lastState.terminated.reason=OOMKilled and exitCode=137 after kill.
+# - The pod may restart into CrashLoopBackOff afterward; that is expected.
+#   Match on exit 137 / OOMKilled (this runbook), not CrashLoop-only signals.
+# - UBI minimal is available on RHEL-based OCP clusters without extra registry
+#   config (same approach as crashloopbackoff / tekton-timeout fixtures).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spre-oomkilled-test
+  labels:
+    purpose: spre-runbook-testing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intentional-oom
+  namespace: spre-oomkilled-test
+  labels:
+    app: intentional-oom
+    purpose: spre-runbook-testing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: intentional-oom
+  template:
+    metadata:
+      labels:
+        app: intentional-oom
+    spec:
+      containers:
+        - name: oom
+          image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "intentional OOM for oomkilled runbook test" >&2
+              echo "growing memory until cgroup OOM killer sends SIGKILL (exit 137)" >&2
+              x=x
+              while true; do
+                x="$x$x" 2>/dev/null || true
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 32Mi

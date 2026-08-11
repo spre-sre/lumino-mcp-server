@@ -1,0 +1,106 @@
+# OOMKilled runbook — SPRE-5972
+# Schema: design spec §5.2 (spre.agents/v1 Runbook)
+# Pattern: design spec §3.2 pattern #1 (canonical example)
+# Tools verified against lumino-mcp-server MCP signatures
+# Live-validated on kind-konflux (SPRE-5972): fixture reaches exit 137 / OOMKilled;
+# check_resource_constraints reports via lastState after restart; prometheus may be
+# unavailable on kind (skip and rely on pod resources + lastState).
+apiVersion: spre.agents/v1
+kind: Runbook
+metadata:
+  name: oomkilled
+  description: "Container killed due to memory limit exceeded"
+  failure_type: OOMKilled
+spec:
+  trigger:
+    # String match against error/status/log text (§3.2: simple string matching).
+    patterns:
+      - "OOMKilled"
+      - "exit code 137"
+      - "memory cgroup out of memory"
+    # Kubernetes terminated/waiting reason and related events.
+    # Live kind test: OOMKilling event may be absent; BackOff after OOM is common.
+    events:
+      - "OOMKilled"
+      - "OOMKilling"
+    # SIGKILL from the OOM killer — hand off CrashLoopBackOff (exit != 137) to that runbook.
+    exit_codes: [137]
+  diagnostic_steps:
+    # §3.2 prescribed tools: check_resource_constraints, prometheus_query (usage + limit).
+    # get_kubernetes_resource added from SOP practice (oc describe) to confirm
+    # state/lastState.terminated.reason/exitCode — params verified against Lumino MCP schemas.
+    # Live kind test: check_resource_constraints only appends oom_killed_containers from
+    # lastState.terminated (post-restart). Always confirm with get_kubernetes_resource for
+    # current state.terminated as well (first kill before restart can miss lastState).
+    - tool: lumino.check_resource_constraints
+      args:
+        namespace: "{{ namespace }}"
+      extract: ["status", "summary", "oom_killed_containers", "resource_quotas", "high_utilization_quotas", "recommendations"]
+    - tool: lumino.get_kubernetes_resource
+      args:
+        resource_type: "pod"
+        name: "{{ pod }}"
+        namespace: "{{ namespace }}"
+        output_format: "detailed"
+      extract: ["status", "state", "lastState", "exitCode", "reason", "message", "resources"]
+    - tool: lumino.prometheus_query
+      args:
+        # Instant working-set bytes for the pod (design §3.2 example query).
+        query: "container_memory_working_set_bytes{namespace='{{ namespace }}', pod='{{ pod }}', container!='', container!='POD'}"
+        query_type: "instant"
+        format: "json"
+      extract: ["status", "data", "result_count"]
+      # Skip when Prometheus/Thanos is not discoverable (common on kind).
+      on_failure: skip
+    - tool: lumino.prometheus_query
+      args:
+        # Instant memory limit from kube-state-metrics (design §3.2 example query).
+        query: "kube_pod_container_resource_limits{namespace='{{ namespace }}', pod='{{ pod }}', resource='memory'}"
+        query_type: "instant"
+        format: "json"
+      extract: ["status", "data", "result_count"]
+      on_failure: skip
+    - tool: lumino.prometheus_query
+      args:
+        # Range query to distinguish sustained pressure near the limit vs a sudden spike.
+        # start_time/end_time should be set by the agent to the investigation window
+        # (e.g. 1h before OOM through now).
+        query: "container_memory_working_set_bytes{namespace='{{ namespace }}', pod='{{ pod }}', container!='', container!='POD'}"
+        query_type: "range"
+        start_time: "{{ start_time }}"
+        end_time: "{{ end_time }}"
+        step: "60s"
+        format: "json"
+      extract: ["status", "data", "result_count"]
+      on_failure: skip
+  analysis:
+    compare:
+      - "current_memory_usage (working set) vs memory_limit from prometheus_query results (if metrics available); otherwise compare pod resources.limits.memory from get_kubernetes_resource"
+      - "oom_killed_containers from check_resource_constraints vs state/lastState.terminated on the target pod"
+      - "memory request vs limit on the container resources (headroom / Guaranteed vs Burstable)"
+      - "namespace ResourceQuota memory used vs hard limit (high_utilization_quotas)"
+    check:
+      - "Is state.terminated or lastState.terminated reason OOMKilled and/or exitCode 137? If exit is not 137, prefer crashloopbackoff instead."
+      - "Transient ImagePullBackOff before the first successful pull does not change the runbook if exit 137 / OOMKilled is present — stay on oomkilled."
+      - "Is usage consistently near limit (>90%), or was there a sudden spike before the kill? (Skip if prometheus_query was skipped.)"
+      - "Which containers in the namespace were OOMKilled (oom_killed_containers), and is this isolated or widespread?"
+      - "Did the OOM start after a deploy, traffic increase, or PipelineRun backlog (correlate with events / PLR count for controllers like tekton-kueue)?"
+      - "Is the workload a Tekton TaskRun/PipelineRun step — if so, raise memory in the task definition rather than only patching the live pod?"
+      - "Is the namespace under ResourceQuota pressure that would block a higher memory limit?"
+  remediation:
+    - "Increase memory limit (and request if Guaranteed QoS is required) in the workload definition — Deployment/StatefulSet, or Tekton Task/Pipeline task definition for build steps"
+    - "For GitOps-managed infra (e.g. infra-deployments), open a PR to raise limits rather than only applying a live patch"
+    - "Check for memory leaks or unbounded caches in the process; reduce cache size or split the work into smaller units when a larger limit is not appropriate"
+    - "If many pods OOM together, check node memory pressure and namespace quotas before raising individual limits"
+    - "For tekton-kueue / shared controllers, follow the Kueue OOMKilled SOP (PipelineRun backlog drives in-memory cache growth)"
+  verification:
+    - "Rerun check_resource_constraints and confirm oom_killed_containers is empty (or no longer growing) for the namespace"
+    - "Rerun prometheus_query for working set vs limit and confirm usage stays safely below the new limit under expected load"
+    - "Confirm the pod/TaskRun stays Running/Succeeded without exit 137 / OOMKilled in lastState"
+    - "If this was a PipelineRun step, rerun the PipelineRun and monitor memory consumption through completion"
+  rollback:
+    - "If a memory-limit increase was applied and the workload becomes unschedulable or starves the node, roll back to the previous request/limit and investigate leak/split alternatives"
+    - "Revert the GitOps PR / Deployment revision if the change was synced via ArgoCD and caused scheduling or quota failures"
+  escalation:
+    condition: "OOMKilled persists after limit increases, appears across many namespaces/nodes, or the fix requires application/code changes outside SRE control"
+    target: "Owning application team for the alert namespace (see Application Team Contact List); for tekton-kueue / shared infra escalate to #forum-konflux-infrastructure"
