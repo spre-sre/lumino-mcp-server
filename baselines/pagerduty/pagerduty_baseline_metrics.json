@@ -1,0 +1,295 @@
+{
+  "metadata": {
+    "ticket": "SPRE-5966",
+    "epic": "SPRE-5901",
+    "description": "6-month PagerDuty incident baseline for SPRE-managed services",
+    "period": {
+      "since": "2026-02-19",
+      "until": "2026-08-19"
+    },
+    "teams_included": [
+      "SP Resilience Engineering (P9XWTY9)",
+      "Layered Products SRE (P3T74IY)"
+    ],
+    "total_incidents": 29160,
+    "extracted_at": "2026-08-19T15:18:00Z"
+  },
+  "mttr": {
+    "description": "Mean Time to Resolve - measured from incident creation to resolution",
+    "resolved_incident_count": 28988,
+    "mean": {
+      "seconds": 75041.8,
+      "human": "20.8h"
+    },
+    "median": {
+      "seconds": 1504.0,
+      "human": "25.1m"
+    },
+    "percentiles": {
+      "p50": { "seconds": 1504.0, "human": "25.1m" },
+      "p75": { "seconds": 41137.0, "human": "11.4h" },
+      "p90": { "seconds": 205963.0, "human": "2.4d" },
+      "p95": { "seconds": 444414.0, "human": "5.1d" },
+      "p99": { "seconds": 972368.0, "human": "11.3d" }
+    }
+  },
+  "triage_time": {
+    "description": "Time to first acknowledge - measured from incident creation to first acknowledgement",
+    "incidents_with_ack_data": 8,
+    "note": "Low ack count indicates most incidents are auto-resolved or resolved without explicit acknowledgement",
+    "mean": {
+      "seconds": 87925.8,
+      "human": "1.0d"
+    },
+    "median": {
+      "seconds": 45.0,
+      "human": "45s"
+    },
+    "percentiles": {
+      "p50": { "seconds": 58.0, "human": "58s" },
+      "p75": { "seconds": 2656.0, "human": "44.3m" },
+      "p90": { "seconds": 700495.0, "human": "8.1d" },
+      "p95": { "seconds": 700495.0, "human": "8.1d" },
+      "p99": { "seconds": 700495.0, "human": "8.1d" }
+    }
+  },
+  "alert_volume": {
+    "by_status": {
+      "resolved": 28988,
+      "triggered": 164,
+      "acknowledged": 8
+    },
+    "by_urgency": {
+      "high": 15466,
+      "low": 13694
+    },
+    "by_month": {
+      "2026-02": 9101,
+      "2026-03": 5691,
+      "2026-04": 4789,
+      "2026-05": 2328,
+      "2026-06": 2945,
+      "2026-07": 2162,
+      "2026-08": 2144
+    },
+    "by_service": [
+      {
+        "service": "Service Lifecycle Soaking",
+        "service_id": "P60DRPX",
+        "incidents": 21680,
+        "alerts": 48103,
+        "resolved": 21544,
+        "triggered": 136,
+        "acknowledged": 0,
+        "pct_of_total": 74.3
+      },
+      {
+        "service": "Service Lifecyle Silent Test",
+        "service_id": "PXW43LG",
+        "incidents": 5165,
+        "alerts": 5165,
+        "resolved": 5155,
+        "triggered": 10,
+        "acknowledged": 0,
+        "pct_of_total": 17.7
+      },
+      {
+        "service": "Service Lifecycle SRE",
+        "service_id": "PESM5LA",
+        "incidents": 1114,
+        "alerts": 1118,
+        "resolved": 1095,
+        "triggered": 17,
+        "acknowledged": 2,
+        "pct_of_total": 3.8
+      },
+      {
+        "service": "managed-api-service-apim01i.vbyz.p1.openshiftapps.com-hive-cluster",
+        "service_id": "PE8KN9Z",
+        "incidents": 474,
+        "alerts": 474,
+        "resolved": 473,
+        "triggered": 0,
+        "acknowledged": 1,
+        "pct_of_total": 1.6
+      },
+      {
+        "service": "managed-api-service-apim01p.zbsm.p1.openshiftapps.com-hive-cluster",
+        "service_id": "PEW6B95",
+        "incidents": 310,
+        "alerts": 310,
+        "resolved": 309,
+        "triggered": 1,
+        "acknowledged": 0,
+        "pct_of_total": 1.1
+      },
+      {
+        "service": "Konflux Dataplane",
+        "service_id": "P99JEYA",
+        "incidents": 170,
+        "alerts": 291,
+        "resolved": 170,
+        "triggered": 0,
+        "acknowledged": 0,
+        "pct_of_total": 0.6
+      },
+      {
+        "service": "CSSRE Pager RHOAM",
+        "service_id": "PSUAHF2",
+        "incidents": 55,
+        "alerts": 0,
+        "resolved": 54,
+        "triggered": 0,
+        "acknowledged": 1,
+        "pct_of_total": 0.2
+      },
+      {
+        "service": "SPRE Traditional Pipelines",
+        "service_id": "P36TJEM",
+        "incidents": 55,
+        "alerts": 59,
+        "resolved": 55,
+        "triggered": 0,
+        "acknowledged": 0,
+        "pct_of_total": 0.2
+      },
+      {
+        "service": "SPRE-5431 PoC - Konflux SLO Alerts",
+        "service_id": "PD6V6H2",
+        "incidents": 40,
+        "alerts": 29,
+        "resolved": 40,
+        "triggered": 0,
+        "acknowledged": 0,
+        "pct_of_total": 0.1
+      },
+      {
+        "service": "SLSRE Package Operator",
+        "service_id": "P9Y4ILB",
+        "incidents": 18,
+        "alerts": 18,
+        "resolved": 17,
+        "triggered": 0,
+        "acknowledged": 1,
+        "pct_of_total": 0.1
+      },
+      {
+        "service": "IBM Cloud Konflux Infrastructure",
+        "service_id": "PE46DX8",
+        "incidents": 15,
+        "alerts": 25,
+        "resolved": 15,
+        "triggered": 0,
+        "acknowledged": 0,
+        "pct_of_total": 0.1
+      },
+      {
+        "service": "managed-api-service-apim01d.egj7.p1.openshiftapps.com-hive-cluster",
+        "service_id": "PIVMFPB",
+        "incidents": 12,
+        "alerts": 12,
+        "resolved": 11,
+        "triggered": 0,
+        "acknowledged": 1,
+        "pct_of_total": 0.0
+      },
+      {
+        "service": "mt-sre-deadmansnitch",
+        "service_id": "P1GVS3X",
+        "incidents": 9,
+        "alerts": 10,
+        "resolved": 9,
+        "triggered": 0,
+        "acknowledged": 0,
+        "pct_of_total": 0.0
+      },
+      {
+        "service": "CSSRE Pager RHOSAK",
+        "service_id": "POLZ93D",
+        "incidents": 7,
+        "alerts": 0,
+        "resolved": 7,
+        "triggered": 0,
+        "acknowledged": 0,
+        "pct_of_total": 0.0
+      },
+      {
+        "service": "SPRE - TP - Catchpoint",
+        "service_id": "P5J35AS",
+        "incidents": 5,
+        "alerts": 5,
+        "resolved": 5,
+        "triggered": 0,
+        "acknowledged": 0,
+        "pct_of_total": 0.0
+      },
+      {
+        "service": "AWS Konflux Infrastructure",
+        "service_id": "PILTL1X",
+        "incidents": 4,
+        "alerts": 4,
+        "resolved": 3,
+        "triggered": 0,
+        "acknowledged": 1,
+        "pct_of_total": 0.0
+      },
+      {
+        "service": "managed-api-service-ocp-prod.0vvq.p1.openshiftapps.com-hive-cluster",
+        "service_id": "P39WU7R",
+        "incidents": 4,
+        "alerts": 4,
+        "resolved": 4,
+        "triggered": 0,
+        "acknowledged": 0,
+        "pct_of_total": 0.0
+      },
+      {
+        "service": "managed-odh-ospo-osci.z3b1.p1.openshiftapps.com-hive-cluster",
+        "service_id": "PGHK37O",
+        "incidents": 4,
+        "alerts": 4,
+        "resolved": 4,
+        "triggered": 0,
+        "acknowledged": 0,
+        "pct_of_total": 0.0
+      },
+      {
+        "service": "SPRE Tickets",
+        "service_id": "PJTYB1Q",
+        "incidents": 1,
+        "alerts": 0,
+        "resolved": 1,
+        "triggered": 0,
+        "acknowledged": 0,
+        "pct_of_total": 0.0
+      },
+      {
+        "service": "LPSRE Addon Operator",
+        "service_id": "PXO9IPI",
+        "incidents": 1,
+        "alerts": 1,
+        "resolved": 0,
+        "triggered": 0,
+        "acknowledged": 1,
+        "pct_of_total": 0.0
+      }
+    ],
+    "by_severity": {
+      "note": "PagerDuty uses 'urgency' (high/low) rather than severity levels. Mapped as: high urgency = critical/warning, low urgency = informational/soaking",
+      "high": {
+        "count": 15466,
+        "pct_of_total": 53.0
+      },
+      "low": {
+        "count": 13694,
+        "pct_of_total": 47.0
+      }
+    }
+  },
+  "top_incident_types": [
+    { "title": "ACMHostedClusterKubeConfigSecretCopyFailure", "count": 5284, "note": "Aggregated across all management clusters" },
+    { "title": "Multiple Alerts (apim01i/apim01p hive clusters)", "count": 727, "note": "Critical firing alerts on managed API services" },
+    { "title": "CertManagerCertNotReady", "count": 177, "note": "Certificate renewal failures" },
+    { "title": "OADPRecoveryJobStale", "count": 316, "note": "Stale backup recovery jobs" }
+  ]
+}
