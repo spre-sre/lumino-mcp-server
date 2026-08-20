@@ -1,0 +1,172 @@
+{
+  "metadata": {
+    "description": "DORA metrics baseline for SPRE-managed Konflux projects from DevLake",
+    "period": {
+      "since": "2026-02-19",
+      "until": "2026-08-19"
+    },
+    "projects_analyzed": [
+      "Secureflow - Konflux - Global",
+      "Secureflow - Konflux - Infrastructure Team"
+    ],
+    "extracted_at": "2026-08-19T15:56:00Z"
+  },
+  "deployment_frequency": {
+    "konflux_global": {
+      "total_deployments": 649,
+      "unique_deployment_days": 134,
+      "period_days": 181,
+      "avg_deployments_per_week": 24.04,
+      "avg_deployment_days_per_week": 4.96,
+      "dora_level": "High",
+      "by_month": {
+        "2026-02": { "deployment_days": 6, "total_deployments": 62 },
+        "2026-03": { "deployment_days": 26, "total_deployments": 258 },
+        "2026-04": { "deployment_days": 25, "total_deployments": 128 },
+        "2026-05": { "deployment_days": 19, "total_deployments": 41 },
+        "2026-06": { "deployment_days": 23, "total_deployments": 68 },
+        "2026-07": { "deployment_days": 22, "total_deployments": 65 },
+        "2026-08": { "deployment_days": 13, "total_deployments": 27 }
+      }
+    },
+    "konflux_infrastructure": {
+      "total_deployments": 406,
+      "unique_deployment_days": 87,
+      "period_days": 181,
+      "avg_deployments_per_week": 15.62,
+      "avg_deployment_days_per_week": 3.35,
+      "dora_level": "High",
+      "by_month": {
+        "2026-02": { "deployment_days": 6, "total_deployments": 51 },
+        "2026-03": { "deployment_days": 26, "total_deployments": 212 },
+        "2026-04": { "deployment_days": 19, "total_deployments": 92 },
+        "2026-05": { "deployment_days": 7, "total_deployments": 9 },
+        "2026-06": { "deployment_days": 11, "total_deployments": 16 },
+        "2026-07": { "deployment_days": 12, "total_deployments": 18 },
+        "2026-08": { "deployment_days": 6, "total_deployments": 8 }
+      }
+    }
+  },
+  "lead_time_for_changes": {
+    "project": "Secureflow - Konflux - Infrastructure Team",
+    "deployed_prs_count": 1541,
+    "avg_lead_time_hours": 1345.47,
+    "avg_lead_time_human": "56.1 days",
+    "dora_level": "Low",
+    "breakdown": {
+      "avg_coding_time_hours": 10.04,
+      "avg_pickup_time_hours": 16.1,
+      "avg_review_time_hours": 45.15,
+      "avg_deploy_time_hours": 1227.91
+    },
+    "breakdown_human": {
+      "avg_coding_time": "10.0 hours",
+      "avg_pickup_time": "16.1 hours",
+      "avg_review_time": "1.9 days",
+      "avg_deploy_time": "51.2 days"
+    },
+    "note": "Lead time is heavily dominated by deploy_time (51.2 days avg), which measures time from PR merge to production deployment. Coding + review + pickup together average only 71.3 hours (3 days)."
+  },
+  "pr_cycle_time": {
+    "project": "Secureflow - Konflux - Infrastructure Team",
+    "merged_pr_count": 2906,
+    "avg_cycle_time_hours": 98.34,
+    "avg_cycle_time_human": "4.1 days",
+    "breakdown": {
+      "avg_coding_time_hours": 11.10,
+      "avg_pickup_time_hours": 21.89,
+      "avg_review_time_hours": 39.93
+    },
+    "breakdown_human": {
+      "avg_coding_time": "11.1 hours",
+      "avg_pickup_time": "21.9 hours",
+      "avg_review_time": "1.7 days"
+    },
+    "by_pr_size": [
+      { "size": "XS (1-50 lines)", "pr_count": 2320, "avg_cycle_time_hours": 87.06, "avg_pickup_hours": 21.76, "avg_review_hours": 31.65 },
+      { "size": "S (51-200 lines)", "pr_count": 332, "avg_cycle_time_hours": 119.77, "avg_pickup_hours": 22.82, "avg_review_hours": 60.11 },
+      { "size": "M (201-500 lines)", "pr_count": 143, "avg_cycle_time_hours": 149.93, "avg_pickup_hours": 19.29, "avg_review_hours": 91.70 },
+      { "size": "L (501-1000 lines)", "pr_count": 59, "avg_cycle_time_hours": 246.58, "avg_pickup_hours": 25.52, "avg_review_hours": 80.65 },
+      { "size": "XL (>1000 lines)", "pr_count": 52, "avg_cycle_time_hours": 149.34, "avg_pickup_hours": 24.55, "avg_review_hours": 87.05 }
+    ],
+    "top_repos": [
+      { "repo": "redhat-appstudio/infra-deployments", "merged_prs": 1565, "avg_cycle_time_hours": 73.64 },
+      { "repo": "redhat-appstudio/infra-common-deployments", "merged_prs": 453, "avg_cycle_time_hours": 38.56 },
+      { "repo": "konflux-ci/namespace-lister", "merged_prs": 140, "avg_cycle_time_hours": 100.92 },
+      { "repo": "konflux-ci/oauth2-proxy", "merged_prs": 132, "avg_cycle_time_hours": 33.64 },
+      { "repo": "konflux-ci/tekton-kueue", "merged_prs": 121, "avg_cycle_time_hours": 379.17 },
+      { "repo": "konflux-ci/may", "merged_prs": 110, "avg_cycle_time_hours": 83.53 },
+      { "repo": "konflux-ci/multi-platform-controller", "merged_prs": 101, "avg_cycle_time_hours": 469.63 },
+      { "repo": "konflux-ci/etcd-shield", "merged_prs": 82, "avg_cycle_time_hours": 243.56 }
+    ]
+  },
+  "pr_stats": {
+    "project": "Secureflow - Konflux - Infrastructure Team",
+    "total_prs": 4766,
+    "merged_prs": 2794,
+    "open_prs": 250,
+    "closed_prs": 1722,
+    "merge_rate_pct": 58.6,
+    "stale_prs_14d": 168,
+    "by_type": {
+      "engineering": { "total": 3722, "merged": 2150, "open": 166, "merge_rate_pct": 57.8 },
+      "dependency_bot": { "total": 1021, "merged": 644, "open": 79, "merge_rate_pct": 63.1 }
+    }
+  },
+  "dora_benchmark_comparison": {
+    "deployment_frequency": {
+      "current": "4.96 days/week (Global), 3.35 days/week (Infra)",
+      "dora_level": "High",
+      "benchmark": {
+        "elite": ">= 5 days/week (on-demand, multiple per day)",
+        "high": ">= 1 day/week",
+        "medium": ">= 1 day/month",
+        "low": "< 1 day/month"
+      }
+    },
+    "lead_time_for_changes": {
+      "current": "56.1 days (end-to-end), 3.0 days (code-to-merge)",
+      "dora_level": "Low (end-to-end) / High (code-to-merge)",
+      "benchmark": {
+        "elite": "< 1 hour",
+        "high": "1 day - 1 week",
+        "medium": "1 - 6 months",
+        "low": "> 6 months"
+      },
+      "note": "The 51.2-day avg deploy time dominates. Code-to-merge (3 days) is High-tier."
+    },
+    "change_failure_rate": {
+      "current_pct": 0.15,
+      "dora_level": "Elite",
+      "total_production_deployments": 1992,
+      "successful_deployments": 1989,
+      "failed_deployments": 3,
+      "method": "Direct from DevLake production deployment outcomes (SUCCESS vs FAILURE) for all Secureflow - Konflux projects",
+      "by_month": {
+        "2026-02": { "successful": 186, "failed": 0, "total": 186, "cfr_pct": 0.0 },
+        "2026-03": { "successful": 798, "failed": 0, "total": 798, "cfr_pct": 0.0 },
+        "2026-04": { "successful": 393, "failed": 3, "total": 396, "cfr_pct": 0.8 },
+        "2026-05": { "successful": 129, "failed": 0, "total": 129, "cfr_pct": 0.0 },
+        "2026-06": { "successful": 189, "failed": 0, "total": 189, "cfr_pct": 0.0 },
+        "2026-07": { "successful": 204, "failed": 0, "total": 204, "cfr_pct": 0.0 },
+        "2026-08": { "successful": 90, "failed": 0, "total": 90, "cfr_pct": 0.0 }
+      },
+      "benchmark": {
+        "elite": "< 5%",
+        "high": "6-15%",
+        "medium": "16-30%",
+        "low": "> 30%"
+      }
+    },
+    "mttr": {
+      "current": "25.1 minutes (median), from SPRE-5966 PagerDuty baseline",
+      "dora_level": "Elite",
+      "benchmark": {
+        "elite": "< 1 hour",
+        "high": "< 1 day",
+        "medium": "1 day - 1 week",
+        "low": "> 1 week"
+      }
+    }
+  }
+}
