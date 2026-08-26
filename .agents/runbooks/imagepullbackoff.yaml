@@ -1,0 +1,101 @@
+# ImagePullBackOff Runbook
+# Automated remediation steps for container image pull failures
+
+title: "ImagePullBackOff / ErrImagePull Resolution"
+
+severity: "HIGH"
+
+estimated_time: "15-30 minutes"
+
+triggers:
+  - "ImagePullBackOff"
+  - "ErrImagePull"
+  - "Failed to pull image"
+  - "unauthorized: authentication required"
+  - "manifest unknown"
+
+steps:
+  - "Get namespace events to identify the specific failure: smart_get_namespace_events(namespace, time_period='1h', focus_areas=['errors'])"
+  - "Get pod details to see image references and pull secrets: get_kubernetes_resource(resource_type='pod', name=pod_name, namespace=namespace)"
+  - "Verify image reference syntax is valid (registry/namespace/image:tag or @digest format)"
+  - "Check if imagePullSecrets are configured in pod spec or service account"
+  - "If pull secret is missing: Create docker-registry secret with oc create secret docker-registry <name> --docker-server=<registry> --docker-username=<user> --docker-password=<pass> -n <namespace>"
+  - "If pull secret exists, verify credentials are valid: oc get secret <name> -n <namespace> -o jsonpath='{.data.\\.dockerconfigjson}' | base64 -d"
+  - "For OpenShift internal registry: Verify default service account has imagestreams read access and internal registry route is accessible"
+  - "Check if image and tag actually exist in the registry (verify via registry web UI or skopeo inspect docker://<image>)"
+  - "For 'manifest unknown' error: Confirm tag is not a typo, check if image was deleted or never pushed"
+  - "For 'authentication required' error: Verify robot account/credentials are not expired in registry settings"
+  - "For rate limit errors (Docker Hub): Add authenticated pull secret or switch to registry.redhat.io or registry.access.redhat.com"
+  - "For OpenShift internal registry issues: Check image-registry cluster operator status with oc get co image-registry"
+  - "Test registry connectivity from cluster: oc run -it --rm debug --image=curlimages/curl -- curl -I https://<registry-host>"
+  - "Check DNS resolution if registry is custom/internal: oc run -it --rm debug --image=busybox -- nslookup <registry-host>"
+
+diagnostic_tools:
+  - tool: "smart_get_namespace_events"
+    purpose: "Identify image pull failure events and error messages"
+    parameters:
+      - "namespace: affected namespace"
+      - "time_period: '1h' or since failure started"
+      - "focus_areas: ['errors', 'warnings']"
+
+  - tool: "get_kubernetes_resource"
+    purpose: "Retrieve pod spec to see image references and pull secrets"
+    parameters:
+      - "resource_type: 'pod'"
+      - "name: pod name"
+      - "namespace: affected namespace"
+
+common_root_causes:
+  - cause: "Missing image pull secret"
+    indicator: "Error contains 'authentication required' or 'unauthorized'"
+    fix: "Create docker-registry secret and add to service account imagePullSecrets"
+
+  - cause: "Image or tag does not exist"
+    indicator: "Error contains 'manifest unknown' or 'not found'"
+    fix: "Verify image name and tag spelling, check registry for actual tags available"
+
+  - cause: "Pull secret has invalid credentials"
+    indicator: "Error contains 'unauthorized' or 'forbidden' despite secret existing"
+    fix: "Update secret with fresh credentials, check robot account is not expired"
+
+  - cause: "Docker Hub rate limiting"
+    indicator: "Error contains 'toomanyrequests' or 'rate limit exceeded'"
+    fix: "Add authenticated Docker Hub pull secret or use alternative registry"
+
+  - cause: "Registry unavailable or network issue"
+    indicator: "Error contains 'timeout', 'connection refused', or 'i/o timeout'"
+    fix: "Test registry connectivity, check firewall rules, verify DNS resolution"
+
+  - cause: "Malformed image reference"
+    indicator: "Invalid characters or format in image field"
+    fix: "Correct image reference to format: [registry/][namespace/]image[:tag|@digest]"
+
+  - cause: "OpenShift internal registry unavailable"
+    indicator: "Error pulling from image-registry.openshift-image-registry.svc or default-route-openshift-image-registry"
+    fix: "Check image-registry cluster operator: oc get co image-registry, verify registry pods are running in openshift-image-registry namespace"
+
+  - cause: "Missing ImageStream or ImageStreamTag"
+    indicator: "Error contains 'ImageStreamTag not found' or 'ImageStream does not exist'"
+    fix: "Verify ImageStream exists: oc get is -n <namespace>, create if missing or fix deployment reference"
+
+references:
+  - title: "OpenShift Image Pull Secrets"
+    url: "https://docs.openshift.com/container-platform/latest/openshift_images/managing_images/using-image-pull-secrets.html"
+
+  - title: "OpenShift Internal Registry"
+    url: "https://docs.openshift.com/container-platform/latest/registry/index.html"
+
+  - title: "OpenShift ImageStreams"
+    url: "https://docs.openshift.com/container-platform/latest/openshift_images/image-streams-manage.html"
+
+  - title: "Red Hat Registry Authentication"
+    url: "https://access.redhat.com/RegistryAuthentication"
+
+  - title: "Troubleshooting OpenShift Image Registry"
+    url: "https://docs.openshift.com/container-platform/latest/registry/troubleshooting-image-registry.html"
+
+  - title: "Docker Hub Rate Limiting"
+    url: "https://docs.docker.com/docker-hub/download-rate-limit/"
+
+  - title: "Konflux Build Troubleshooting"
+    url: "https://konflux.pages.redhat.com/docs/users/troubleshooting/builds.html"
