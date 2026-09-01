@@ -14,10 +14,10 @@ Step-by-step setup of the MCP diagnostics stack used by the SPRE SRE team, plus 
 | ngit-memory | [ggeorgie/neural-git](https://gitlab.cee.redhat.com/ggeorgie/neural-git) |
 | DevLake | Hosted Konflux DevLake MCP (HTTP); see [DevLake setup](#devlake) |
 | GitHub | [github/github-mcp-server](https://github.com/github/github-mcp-server) |
-| GitLab | SPRE `shared-mcp` plugin → [`@structured-world/gitlab-mcp`](https://www.npmjs.com/package/@structured-world/gitlab-mcp); see [GitLab setup](#gitlab) |
+| GitLab | [SPRE AI Marketplace — GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp) (`shared-mcp` plugin configs) |
 | Konflux Portal | Image `quay.io/eisraeli/konflux-portal-mcp`; see [Konflux Portal setup](#konflux-portal) |
 | Sumo Logic | [Sumo Logic MCP Server](https://www.sumologic.com/help/docs/api/mcp-server/) |
-| Jira | SPRE `shared-mcp` plugin → [`mcp-atlassian`](https://github.com/sooperset/mcp-atlassian); see [Jira setup](#jira) |
+| Jira | [SPRE AI Marketplace — GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp) (`shared-mcp` / `mcp-atlassian` plugin configs) |
 
 ---
 
@@ -59,6 +59,8 @@ Required for the servers in this guide:
 
 > **Config note:** Put MCP server entries in `~/.claude.json` under `mcpServers`. If `${VAR}` expansion does not resolve in your Claude Code build, put the real value in the `env` block or export the variable in the shell before launching Claude Code.
 >
+> Plugin-based servers (`shared-mcp@spre-ai-marketplace`, `technical-investigation@spre-ai-marketplace`) use the env-file and launcher layout from the [SPRE AI Marketplace GitLab MCP section](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp). Match those configs rather than inventing new paths.
+>
 > Each Claude Code JSON example in Part 1 shows the full `mcpServers` shape so first-time setup is copy-paste friendly. If `~/.claude.json` already exists, **merge** the new server key into the existing `mcpServers` object — do not replace the whole file (Claude Code also stores other settings there).
 >
 > ```json
@@ -92,6 +94,8 @@ Required for the servers in this guide:
 Lumino is the core cluster/pipeline diagnostics server. Tool inventory lives in the [Available Tools](../README.md#available-tools) section of this repo's README (do not hard-code a count here; it changes over time).
 
 **Option A: SPRE AI Marketplace plugin (recommended for the team)**
+
+Plugin enablement, `~/.config/mcp-tools/` env files, and launchers follow [SPRE AI Marketplace — GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp). Enabling `shared-mcp` here also registers GitLab and Jira; you still add their env files in [§1.7](#gitlab) and [§1.10](#jira).
 
 The `technical-investigation` plugin does **not** ship a remote Lumino binary. Its launch script runs a **local clone** via `uv run main.py`. You must configure the path first.
 
@@ -236,7 +240,7 @@ Follow the [Slack MCP setup](https://gitlab.cee.redhat.com/qe-ds/rh-ai-slack-new
 
 Preferred: [slack-token-extractor](https://github.com/maorfr/slack-token-extractor) (Chrome extension instructions in that repo). Never commit tokens.
 
-**Run via Podman or Docker** (image `quay.io/redhat-ai-tools/slack-mcp`). The server is a container on stdio — pick the runtime you already have. Merge under `mcpServers` in `~/.claude.json`.
+**Run via Podman or Docker** (image `quay.io/redhat-ai-tools/slack-mcp`). The server is a container on stdio - pick the runtime you already have. Merge under `mcpServers` in `~/.claude.json`.
 
 **Podman:**
 
@@ -416,7 +420,7 @@ docker info >/dev/null && docker pull ghcr.io/github/github-mcp-server
 
 <h3 id="gitlab">1.7 GitLab MCP Server</h3>
 
-Team GitLab CEE access uses [`@structured-world/gitlab-mcp`](https://www.npmjs.com/package/@structured-world/gitlab-mcp) (Node.js 24+). The `shared-mcp@spre-ai-marketplace` plugin launched in [Lumino Option A](#setup) already registers this server; you only need the env file.
+Team GitLab CEE access uses [`@structured-world/gitlab-mcp`](https://www.npmjs.com/package/@structured-world/gitlab-mcp) (Node.js 24+). Plugin config (env file path, launcher, package pin) is taken from [SPRE AI Marketplace — GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp). The `shared-mcp@spre-ai-marketplace` plugin launched in [Lumino Option A](#setup) already registers this server; you only need the env file.
 
 **Get a token:** GitLab CEE → **Preferences** → **Access Tokens** (`https://gitlab.cee.redhat.com/-/user_settings/personal_access_tokens`). `read_api` is enough for investigation; use `api` only if you need write tools. VPN required.
 
@@ -432,7 +436,7 @@ EOF
 
 **Option A: SPRE AI Marketplace plugin (recommended)**
 
-With `shared-mcp@spre-ai-marketplace` enabled (see Lumino setup), restart Claude Code. GitLab tools appear under the plugin after the env file exists.
+With `shared-mcp@spre-ai-marketplace` enabled (see Lumino setup and [marketplace GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp)), restart Claude Code. GitLab tools appear under the plugin after the env file exists.
 
 **Option B: Manual registration in `~/.claude.json`**
 
@@ -544,7 +548,7 @@ Then in Claude Code run `/mcp`, select **sumo-logic**, and **Authenticate**. A b
 
 <h3 id="jira">1.10 Jira MCP Server</h3>
 
-Red Hat Jira Cloud (`https://redhat.atlassian.net`) via [`mcp-atlassian`](https://github.com/sooperset/mcp-atlassian). The `shared-mcp@spre-ai-marketplace` plugin already registers this server; you only need the env file.
+Red Hat Jira Cloud (`https://redhat.atlassian.net`) via [`mcp-atlassian`](https://github.com/sooperset/mcp-atlassian). Plugin config is taken from [SPRE AI Marketplace — GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp) (`shared-mcp`). The plugin already registers this server; you only need the env file.
 
 **Get a token:**
 
@@ -566,7 +570,7 @@ EOF
 
 **Option A: SPRE AI Marketplace plugin (recommended)**
 
-With `shared-mcp@spre-ai-marketplace` enabled (see Lumino setup), restart Claude Code. Jira tools appear as `mcp-atlassian` (issue search, get issue, comments, and so on).
+With `shared-mcp@spre-ai-marketplace` enabled (see Lumino setup and [marketplace GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp)), restart Claude Code. Jira tools appear as `mcp-atlassian` (issue search, get issue, comments, and so on).
 
 **Option B: Manual registration in `~/.claude.json`**
 
@@ -1188,7 +1192,7 @@ list_incidents (PagerDuty)
 
 - Run each example against a cluster and PagerDuty account you can access
 - Browse tools with `/mcp`; try prompts from [Usage Examples](../README.md#usage-examples)
-- Marketplace skill for JIRA-driven work: `/technical-investigation:ticket-investigation` (from `technical-investigation@spre-ai-marketplace`) — needs the [Jira MCP](#jira) connected
+- Marketplace skill for JIRA-driven work: `/technical-investigation:ticket-investigation` (from `technical-investigation@spre-ai-marketplace`; see [SPRE AI Marketplace — GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp) for plugin setup) — needs the [Jira MCP](#jira) connected
 - Use Konflux Portal when you need env URLs or tenant→cluster mapping before opening Lumino
 - Contributing new Lumino tools: [Tool Development Guide](./LUMINO_MCP_TOOL_DEVELOPMENT_GUIDE.md)
 
