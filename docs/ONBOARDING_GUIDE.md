@@ -2,7 +2,7 @@
 
 Step-by-step setup of the MCP diagnostics stack used by the SPRE SRE team, plus how to run a first diagnostic, interpret results, and troubleshoot connectivity. By the end you will have the core diagnostics servers working in Claude Code: Lumino, PagerDuty, Slack, DevLake, ngit-memory, plus GitHub, GitLab CEE, Konflux Portal, Sumo Logic, and Jira.
 
-**Time to complete:** ~1.5 hours for setup, ~30 minutes for the worked examples.
+**Time to complete:** ~2 hours for setup, ~30 minutes for the worked examples.
 
 **Sources of truth for setup:**
 
@@ -15,7 +15,7 @@ Step-by-step setup of the MCP diagnostics stack used by the SPRE SRE team, plus 
 | DevLake | Hosted Konflux DevLake MCP (HTTP); see [DevLake setup](#devlake) |
 | GitHub | [github/github-mcp-server](https://github.com/github/github-mcp-server) |
 | GitLab | [SPRE AI Marketplace — GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp) (`shared-mcp` plugin configs) |
-| Konflux Portal | Image `quay.io/eisraeli/konflux-portal-mcp`; see [Konflux Portal setup](#konflux-portal) |
+| Konflux Portal | Image `quay.io/eisraeli/konflux-portal-mcp@sha256:9476ead9108e6630e22061ab45ed2ffbb157697040103b1cb901a4178ddb71d8`; see [Konflux Portal setup](#konflux-portal) |
 | Sumo Logic | [Sumo Logic MCP Server](https://www.sumologic.com/help/docs/api/mcp-server/) |
 | Jira | [SPRE AI Marketplace — GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp) (`shared-mcp` / `mcp-atlassian` plugin configs) |
 
@@ -44,12 +44,12 @@ Required for the servers in this guide:
 - [ ] **Claude Code CLI** ([installation guide](https://docs.anthropic.com/en/docs/claude-code/overview))
 - [ ] **Python 3.10+** and **[uv](https://docs.astral.sh/uv/)** (Lumino, ngit, Jira/`mcp-atlassian`; PagerDuty needs Python 3.8+)
 - [ ] **Node.js 24+** — GitLab MCP (`npx @structured-world/gitlab-mcp`)
-- [ ] **GitLab CEE access** — SSH (or HTTPS) to clone `gitlab.cee.redhat.com` repos (PagerDuty, ngit-memory) and a GitLab PAT for the GitLab MCP
+- [ ] **GitLab CEE access** — SSH (or HTTPS) to clone `gitlab.cee.redhat.com` repos (PagerDuty, ngit-memory)
 - [ ] **Kubernetes/OpenShift access** — valid kubeconfig with read permissions on at least one cluster
 - [ ] **oc CLI** — logged in to the target cluster (`oc login ...`)
 - [ ] **PagerDuty API token** — see [PagerDuty setup](#pagerduty)
 - [ ] **Slack session tokens** (`xoxc` / `xoxd`) — see [Slack setup](#slack)
-- [ ] **Podman or Docker** — required for the Slack and Konflux Portal container paths (use whichever you already run; the JSON examples are equivalent aside from the command name)
+- [ ] **Podman or Docker** — required for Slack, Konflux Portal, and GitHub Option B (all container paths; use whichever you already run; the JSON examples are equivalent aside from the command name)
 - [ ] **Red Hat VPN** — hosted DevLake MCP, GitLab CEE, and Konflux Portal (Portal uses internal DNS from the container)
 - [ ] **DevLake SSO Bearer token** — see [DevLake setup](#devlake)
 - [ ] **GitHub Personal Access Token** — see [GitHub setup](#github)
@@ -92,6 +92,8 @@ Required for the servers in this guide:
 ### 1.1 Lumino MCP Server
 
 Lumino is the core cluster/pipeline diagnostics server. Tool inventory lives in the [Available Tools](../README.md#available-tools) section of this repo's README (do not hard-code a count here; it changes over time).
+
+> A shared multi-cluster **Pharos** endpoint is coming to the inner-services stage cluster ([SPRE-6615](https://redhat.atlassian.net/browse/SPRE-6615)). Once it lands, connecting is one JSON block (URL + bearer token) and this local Lumino setup becomes the documented fallback. [SPRE-6652](https://redhat.atlassian.net/browse/SPRE-6652) will do the full rewrite.
 
 **Option A: SPRE AI Marketplace plugin (recommended for the team)**
 
@@ -420,7 +422,7 @@ docker info >/dev/null && docker pull ghcr.io/github/github-mcp-server
 
 <h3 id="gitlab">1.7 GitLab MCP Server</h3>
 
-Team GitLab CEE access uses [`@structured-world/gitlab-mcp`](https://www.npmjs.com/package/@structured-world/gitlab-mcp) (Node.js 24+). Plugin config (env file path, launcher, package pin) is taken from [SPRE AI Marketplace — GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp). The `shared-mcp@spre-ai-marketplace` plugin launched in [Lumino Option A](#setup) already registers this server; you only need the env file.
+Team GitLab CEE access uses [`@structured-world/gitlab-mcp`](https://www.npmjs.com/package/@structured-world/gitlab-mcp) (Node.js 24+). Plugin config (env file path, launcher, package pin) is taken from [SPRE AI Marketplace — GitLab MCP](https://gitlab.cee.redhat.com/spre-ai-marketplace#gitlab-mcp) — that pin is authoritative for Option A. The `shared-mcp@spre-ai-marketplace` plugin launched in [Lumino Option A](#setup) already registers this server; you only need the env file.
 
 **Get a token:** GitLab CEE → **Preferences** → **Access Tokens** (`https://gitlab.cee.redhat.com/-/user_settings/personal_access_tokens`). `read_api` is enough for investigation; use `api` only if you need write tools. VPN required.
 
@@ -432,7 +434,10 @@ cat > ~/.config/mcp-tools/gitlab.env <<'EOF'
 export GITLAB_TOKEN=your-gitlab-cee-token
 export GITLAB_API_URL=https://gitlab.cee.redhat.com/
 EOF
+chmod 600 ~/.config/mcp-tools/gitlab.env
 ```
+
+Never commit this file (it holds a live PAT).
 
 **Option A: SPRE AI Marketplace plugin (recommended)**
 
@@ -446,7 +451,7 @@ With `shared-mcp@spre-ai-marketplace` enabled (see Lumino setup and [marketplace
     "gitlab": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@structured-world/gitlab-mcp@9.1.1"],
+      "args": ["-y", "@structured-world/gitlab-mcp@9"],
       "env": {
         "GITLAB_TOKEN": "your-gitlab-cee-token",
         "GITLAB_API_URL": "https://gitlab.cee.redhat.com/",
@@ -459,6 +464,8 @@ With `shared-mcp@spre-ai-marketplace` enabled (see Lumino setup and [marketplace
 
 If the server starts but only exposes `manage_context`, it is in disconnected mode (VPN down, bad token, or wrong API URL). Fix the env and restart.
 
+For Option B, `@9` tracks the 9.x line (npm latest at review time was 9.1.3). Prefer the marketplace pin when using Option A.
+
 **Verify:** `Who am I on GitLab CEE?` — expect `manage_context` with action `whoami`. Then `Search GitLab CEE for the pager-duty-mcp project`.
 
 ---
@@ -467,7 +474,9 @@ If the server starts but only exposes `manage_context`, it is in disconnected mo
 
 Read-only catalog of Konflux environments, teams, docs, and observability links. It runs as a **container** (same as Slack), so Podman or Docker from [Prerequisites](#prerequisites) is required.
 
-Image: `quay.io/eisraeli/konflux-portal-mcp`. Connect to the Red Hat VPN. The container needs the `mcp-net` bridge plus internal DNS so it can resolve Konflux portal hosts. `mcp-net` is a normal bridge and is **not** persisted across `podman machine` recreate — create it before every start if it is missing.
+Pin the image by digest rather than floating on `latest` from a personal namespace: `quay.io/eisraeli/konflux-portal-mcp@sha256:9476ead9108e6630e22061ab45ed2ffbb157697040103b1cb901a4178ddb71d8` (tag `d96b57e` at review time). Connect to the Red Hat VPN. The container needs the `mcp-net` bridge plus internal DNS so it can resolve Konflux portal hosts. `mcp-net` is a normal bridge and is **not** persisted across `podman machine` recreate — create it before every start if it is missing.
+
+The `--dns` values (`10.11.5.19`, `10.2.32.1`) are Red Hat VPN resolvers. If name resolution starts failing, re-derive them from your VPN DNS (for example `scutil --dns` on macOS while connected) instead of copying stale IPs.
 
 **Podman** (merge under `mcpServers` in `~/.claude.json`):
 
@@ -482,7 +491,7 @@ Image: `quay.io/eisraeli/konflux-portal-mcp`. Connect to the Red Hat VPN. The co
         "--network=mcp-net",
         "--dns=10.11.5.19",
         "--dns=10.2.32.1",
-        "quay.io/eisraeli/konflux-portal-mcp"
+        "quay.io/eisraeli/konflux-portal-mcp@sha256:9476ead9108e6630e22061ab45ed2ffbb157697040103b1cb901a4178ddb71d8"
       ]
     }
   }
@@ -493,14 +502,14 @@ Create the network and pull the image once:
 
 ```bash
 podman network exists mcp-net || podman network create mcp-net
-podman pull quay.io/eisraeli/konflux-portal-mcp
+podman pull quay.io/eisraeli/konflux-portal-mcp@sha256:9476ead9108e6630e22061ab45ed2ffbb157697040103b1cb901a4178ddb71d8
 ```
 
 **Docker:** same JSON with `"command": "docker"`, and:
 
 ```bash
 docker network inspect mcp-net >/dev/null 2>&1 || docker network create mcp-net
-docker pull quay.io/eisraeli/konflux-portal-mcp
+docker pull quay.io/eisraeli/konflux-portal-mcp@sha256:9476ead9108e6630e22061ab45ed2ffbb157697040103b1cb901a4178ddb71d8
 ```
 
 **Verify:** `List Konflux production environments` — expect `list_environments`. `Get console and Grafana URLs for stone-prd-rh01` — expect `get_environment_urls`.
@@ -540,7 +549,12 @@ Or:
 claude mcp add --scope user --transport http sumo-logic "https://mcp.sumologic.com/mcp"
 ```
 
-Then in Claude Code run `/mcp`, select **sumo-logic**, and **Authenticate**. A browser window opens for Sumo / IdP login. An org admin may need to enable CIMD under Administration → Policies before this works.
+Then in Claude Code run `/mcp`, select **sumo-logic**, and **Authenticate**. A browser window opens for Sumo / IdP login.
+
+An org admin must enable **two independent gates** (not one) before this works:
+
+1. **MCP Server access** — Administration → Feature Management
+2. **Enable CIMD Clients** — Administration → Account Security Settings → Policies
 
 **Verify:** `List my available Sumo Logic MCP tools`. Then search logs you already have access to in the Sumo UI.
 
@@ -566,7 +580,10 @@ export JIRA_USERNAME=you@redhat.com
 export JIRA_API_TOKEN=your-jira-api-token
 export JIRA_SSL_VERIFY=true
 EOF
+chmod 600 ~/.config/mcp-tools/mcp-atlassian.env
 ```
+
+Never commit this file (it holds a live API token).
 
 **Option A: SPRE AI Marketplace plugin (recommended)**
 
@@ -594,7 +611,7 @@ With `shared-mcp@spre-ai-marketplace` enabled (see Lumino setup and [marketplace
 }
 ```
 
-Set `MCP_LOGGING_STDOUT` to `false` so log lines cannot corrupt the stdio JSON-RPC channel.
+`TRANSPORT` and `MCP_LOGGING_STDOUT=false` are already the `mcp-atlassian` defaults. Setting them explicitly is optional belt-and-braces so logs cannot leak onto stdout (which would break the JSON-RPC handshake).
 
 **Verify:** `Get Jira issue SPRE-5970` — expect `jira_get_issue` / `jira_search`.
 
@@ -706,25 +723,25 @@ Tools return structured JSON; Claude summarizes in natural language. Useful dist
 /path/to/pager-duty-mcp/.venv/bin/python -m pagerduty_mcp.server --help
 # or: /path/to/pager-duty-mcp/.venv/bin/pagerduty-mcp --help
 
-# Slack
-podman run --rm quay.io/redhat-ai-tools/slack-mcp --help
-# or: docker run --rm quay.io/redhat-ai-tools/slack-mcp --help
+# Slack (timeout: stdio images often hang on --help)
+timeout 10 podman run --rm quay.io/redhat-ai-tools/slack-mcp --help
+# or: timeout 10 docker run --rm quay.io/redhat-ai-tools/slack-mcp --help
 
 # Konflux Portal
-podman run --rm --network=mcp-net quay.io/eisraeli/konflux-portal-mcp --help
-# or: docker run --rm --network=mcp-net quay.io/eisraeli/konflux-portal-mcp --help
+timeout 10 podman run --rm --network=mcp-net quay.io/eisraeli/konflux-portal-mcp@sha256:9476ead9108e6630e22061ab45ed2ffbb157697040103b1cb901a4178ddb71d8 --help
+# or: timeout 10 docker run --rm --network=mcp-net quay.io/eisraeli/konflux-portal-mcp@sha256:9476ead9108e6630e22061ab45ed2ffbb157697040103b1cb901a4178ddb71d8 --help
 ```
 
 2. Check env vars used by **this** stack:
 
 ```bash
-echo "$PAGERDUTY_API_TOKEN"
-echo "$PAGERDUTY_SUBDOMAIN"
-echo "$SLACK_XOXC_TOKEN"
-echo "$LUMINO_MCP_PATH"
-echo "$GITHUB_PERSONAL_ACCESS_TOKEN"
+echo "${PAGERDUTY_API_TOKEN:+set}"
+echo "${PAGERDUTY_SUBDOMAIN:+set}"
+echo "${SLACK_XOXC_TOKEN:+set}"
+echo "${LUMINO_MCP_PATH:+set}"
+echo "${GITHUB_PERSONAL_ACCESS_TOKEN:+set}"
 # sourced from ~/.config/mcp-tools/:
-grep -E '^[A-Z_]+=' ~/.config/mcp-tools/gitlab.env ~/.config/mcp-tools/mcp-atlassian.env 2>/dev/null | sed 's/=.*/=***/'
+grep -E '^(export )?[A-Z_]+=' ~/.config/mcp-tools/gitlab.env ~/.config/mcp-tools/mcp-atlassian.env 2>/dev/null | sed 's/=.*/=***/'
 ```
 
 3. Validate JSON:
@@ -796,17 +813,17 @@ Re-extract `xoxc`/`xoxd` when the browser session expires (tokens are session-bo
 
 ```bash
 podman network exists mcp-net || podman network create mcp-net
-# Docker: docker network inspect mcp-net || docker network create mcp-net
+# Docker: docker network inspect mcp-net >/dev/null 2>&1 || docker network create mcp-net
 ```
 
-3. Pull the image: `podman pull quay.io/eisraeli/konflux-portal-mcp` (or `docker pull ...`)
-4. Keep the `--dns=10.11.5.19` and `--dns=10.2.32.1` args — without them the container cannot resolve internal portal hosts
+3. Pull the image: `podman pull quay.io/eisraeli/konflux-portal-mcp@sha256:9476ead9108e6630e22061ab45ed2ffbb157697040103b1cb901a4178ddb71d8` (or `docker pull ...`)
+4. Keep the `--dns=10.11.5.19` and `--dns=10.2.32.1` args (Red Hat VPN resolvers) — without them the container cannot resolve internal portal hosts
 
 ### Sumo Logic: needs authentication / 401
 
 1. Confirm the MCP URL matches your Sumo deployment ([deployment table](https://www.sumologic.com/help/docs/api/mcp-server/))
 2. In Claude Code run `/mcp` → sumo-logic → **Authenticate** (browser IdP login)
-3. Ask an org admin to enable CIMD under Administration → Policies if authenticate never completes
+3. Ask an org admin to confirm both gates: **MCP Server access** (Administration → Feature Management) and **Enable CIMD Clients** (Administration → Account Security Settings → Policies)
 4. To switch orgs: `/mcp` → sumo-logic → Clear authentication, then Authenticate again
 
 ### Jira: 401 / 403
@@ -814,7 +831,7 @@ podman network exists mcp-net || podman network create mcp-net
 - Username must be the Atlassian account email (`you@redhat.com`), not a display name
 - Recreate the API token at https://id.atlassian.com/manage-profile/security/api-tokens and update `~/.config/mcp-tools/mcp-atlassian.env`
 - Confirm `JIRA_URL=https://redhat.atlassian.net` (no trailing path)
-- If logs appear on stdout, set `MCP_LOGGING_STDOUT=false` — otherwise Claude Code fails the MCP handshake
+- If logs appear on stdout, set `MCP_LOGGING_STDOUT=false` (already the default) so they cannot leak onto the JSON-RPC channel
 
 ### DevLake: 401/403 or connection refused
 
