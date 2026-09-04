@@ -36,7 +36,7 @@ An open source MCP (Model Context Protocol) server empowering SREs with intellig
 
 ## Team Onboarding Guide
 
-New to the SPRE MCP diagnostics stack (Lumino, PagerDuty, Slack, DevLake, ngit-memory)? Start here:
+New to the SPRE MCP diagnostics stack (Lumino, PagerDuty, Slack, DevLake, ngit-memory, GitHub, GitLab, Konflux Portal, Sumo Logic, Jira)? Start here:
 
 - **[docs/ONBOARDING_GUIDE.md](docs/ONBOARDING_GUIDE.md)** — setup, first diagnostic, troubleshooting, three worked examples, and expected tool outputs
 
